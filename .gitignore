@@ -1,0 +1,30 @@
+# 빌드 산출물
+build/
+out/
+bin/
+obj/
+x64/
+x86/
+Debug/
+Release/
+*.obj
+*.pdb
+*.ilk
+*.exp
+*.lib
+*.res
+*.tlog
+*.idb
+
+# Visual Studio
+.vs/
+*.user
+*.suo
+*.aps
+
+# 배포본 로컬 사본
+releases/
+
+# 기타
+*.log
+Thumbs.db
