@@ -1,0 +1,55 @@
+﻿#include <windows.h>
+#include "resource.h"
+#include "../src/app_name.h"
+
+/////////////////////////////////////////////////////////////////////////////
+// 매니페스트 (Per-Monitor V2, asInvoker, comctl32 v6)
+CREATEPROCESS_MANIFEST_RESOURCE_ID RT_MANIFEST "sweepcap.manifest"
+
+/////////////////////////////////////////////////////////////////////////////
+// 아이콘
+IDI_APPICON ICON "sweepcap.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+// 문자열
+LANGUAGE LANG_KOREAN, SUBLANG_DEFAULT
+
+STRINGTABLE
+BEGIN
+    IDS_TRAY_TIP   SWEEPCAP_NAME
+    IDS_MENU_EXIT  "종료"
+    IDS_MENU_DUMP  "좌표 로그 남기기"
+END
+
+/////////////////////////////////////////////////////////////////////////////
+// 버전
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION    SWEEPCAP_VER_COMMA
+ PRODUCTVERSION SWEEPCAP_VER_COMMA
+ FILEFLAGSMASK  VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+ FILEFLAGS      VS_FF_DEBUG
+#else
+ FILEFLAGS      0x0L
+#endif
+ FILEOS         VOS_NT_WINDOWS32
+ FILETYPE       VFT_APP
+ FILESUBTYPE    VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "041204B0"
+        BEGIN
+            VALUE "FileDescription",  SWEEPCAP_NAME
+            VALUE "FileVersion",      SWEEPCAP_VERSION
+            VALUE "InternalName",     SWEEPCAP_NAME
+            VALUE "OriginalFilename", SWEEPCAP_NAME ".exe"
+            VALUE "ProductName",      SWEEPCAP_NAME
+            VALUE "ProductVersion",   SWEEPCAP_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x412, 1200
+    END
+END

@@ -1,0 +1,40 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 25, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug (ASan + 계측기)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SWEEPCAP_ASAN": "ON"
+      }
+    },
+    {
+      "name": "debug-noasan",
+      "displayName": "Debug (ASan 없이)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/debug-noasan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "SWEEPCAP_ASAN": "OFF"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "debug", "configurePreset": "debug" },
+    { "name": "debug-noasan", "configurePreset": "debug-noasan" },
+    { "name": "release", "configurePreset": "release" }
+  ]
+}
