@@ -101,6 +101,9 @@ void CaptureSession::Prewarm() {
     if (active_ || g_prewarmWork == nullptr) {
         return;
     }
+    // 창을 미리 만들어 둔다.
+    overlay_.Prepare();
+
     // 이미 뜨는 중이면 겹쳐 던지지 않는다.
     if (InterlockedCompareExchange(&g_prewarmBusy, 1, 0) != 0) {
         return;

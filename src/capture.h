@@ -60,6 +60,15 @@ public:
     const RECT& Bounds() const { return bounds_; }
     HDC Dc() const { return memDc_.get(); }
 
+    // 어둡게 만든 사본. 선택 영역 밖에 이걸 그대로 깐다.
+    //
+    // 예전에는 밝은 원본을 깔고 그 위를 AlphaBlend로 덮었는데, 픽셀마다 두 번
+    // 쓰는 셈이라 그 사이에 모니터가 갱신되면 밝은 상태가 보였다. 드래그 중
+    // 번쩍이던 원인이다. 오프스크린에 합성해서 막을 수도 있지만 4K 전체를
+    // 합성하는 데 34ms가 들어서(2026-08-20 실측) 그 길로는 안 갔다.
+    // 사본을 미리 만들어 두면 픽셀마다 한 번만 쓴다.
+    HDC DimDc() const { return dimDc_.get(); }
+
     // GrabPixels가 끝난 시점의 GetTickCount64. 프레임이 얼마나 묵었는지 본다.
     ULONGLONG GrabbedAt() const { return grabbedAt_; }
 
@@ -72,6 +81,10 @@ private:
     wil::unique_hdc memDc_;
     wil::unique_hbitmap bitmap_;
     wil::unique_select_object selection_;
+
+    wil::unique_hdc dimDc_;
+    wil::unique_hbitmap dimBitmap_;
+    wil::unique_select_object dimSelection_;
 
     uint32_t* pixels_ = nullptr;
     RECT bounds_{};

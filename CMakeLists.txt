@@ -93,7 +93,6 @@ target_link_libraries(sweepcap PRIVATE
     dwmapi      # DWMWA_EXTENDED_FRAME_BOUNDS
     ole32       # CoTaskMemFree
     comctl32    # LoadIconMetric
-    msimg32     # AlphaBlend (오버레이 어둡게)
     windowscodecs  # WIC PNG 인코딩
 )
 

@@ -12,9 +12,6 @@ namespace {
 
 constexpr wchar_t kOverlayClass[] = L"SweepCap.Overlay";
 
-// 선택 영역 밖을 덮는 어둠의 진하기. 0~255.
-constexpr BYTE kDimAlpha = 110;
-
 // 선택 테두리. 바깥 검정 1px, 안쪽 흰색 1px이라 어떤 배경에서도 보인다.
 constexpr COLORREF kBorderInner = RGB(255, 255, 255);
 constexpr COLORREF kBorderOuter = RGB(0, 0, 0);
@@ -22,7 +19,8 @@ constexpr COLORREF kBorderOuter = RGB(0, 0, 0);
 // 크기 표시 상자.
 constexpr COLORREF kLabelBack = RGB(24, 24, 28);
 constexpr COLORREF kLabelText = RGB(255, 255, 255);
-constexpr int kLabelPadding = 6;
+constexpr int kLabelPaddingX = 8;
+constexpr int kLabelPaddingY = 4;
 constexpr int kLabelGap = 8;
 
 bool g_classRegistered = false;
@@ -84,7 +82,7 @@ LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         case WM_PAINT: {
             PAINTSTRUCT ps{};
             HDC dc = BeginPaint(hwnd, &ps);
-            if (self) {
+            if (self != nullptr) {
                 self->Paint(dc, ps.rcPaint);
             }
             EndPaint(hwnd, &ps);
@@ -114,7 +112,9 @@ bool Overlay::EnsureWindow() {
         wc.hInstance = GetModuleHandleW(nullptr);
         wc.lpszClassName = kOverlayClass;
         wc.hCursor = LoadCursorW(nullptr, IDC_CROSS);
-        wc.hbrBackground = nullptr;
+        // 배경은 직접 그리지만, 창이 처음 보이고 첫 WM_PAINT가 오기 전까지
+        // 시스템이 한 번 칠하는 구간이 있다. 이때 흰색이 스치지 않게 검정으로 둔다.
+        wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         if (RegisterClassExW(&wc) == 0) {
             SC_LOG(L"[오버레이] RegisterClassEx 실패 err=%lu", GetLastError());
             return false;
@@ -129,28 +129,10 @@ bool Overlay::EnsureWindow() {
         SC_LOG(L"[오버레이] CreateWindowEx 실패 err=%lu", GetLastError());
         return false;
     }
-
-    // 어둡게 깔 때 늘려 쓸 1x1 검정 비트맵.
-    wil::unique_hdc_window screen{wil::window_dc{GetDC(nullptr), nullptr}};
-    dimDc_.reset(CreateCompatibleDC(screen.get()));
-    if (dimDc_) {
-        BITMAPINFO info{};
-        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
-        info.bmiHeader.biWidth = 1;
-        info.bmiHeader.biHeight = -1;
-        info.bmiHeader.biPlanes = 1;
-        info.bmiHeader.biBitCount = 32;
-        info.bmiHeader.biCompression = BI_RGB;
-        void* bits = nullptr;
-        dimBitmap_.reset(
-            CreateDIBSection(screen.get(), &info, DIB_RGB_COLORS, &bits, nullptr, 0));
-        if (dimBitmap_ && bits != nullptr) {
-            *static_cast<uint32_t*>(bits) = 0xFF000000u;  // 검정, 불투명
-            dimSelection_ = wil::SelectObject(dimDc_.get(), dimBitmap_.get());
-        }
-    }
     return true;
 }
+
+void Overlay::Prepare() { EnsureWindow(); }
 
 bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
     if (!EnsureWindow()) {
@@ -234,47 +216,51 @@ void Overlay::SetSelection(const RECT& selection) {
     UpdateWindow(hwnd_);
 }
 
-void Overlay::Paint(HDC dc, const RECT& dirty) const {
+void Overlay::Paint(HDC dc, const RECT& dirty) {
     if (!frame_ || !frame_->Valid()) {
         return;
     }
-
-    const int dirtyWidth = static_cast<int>(dirty.right - dirty.left);
-    const int dirtyHeight = static_cast<int>(dirty.bottom - dirty.top);
-    if (dirtyWidth <= 0 || dirtyHeight <= 0) {
+    if (dirty.right <= dirty.left || dirty.bottom <= dirty.top) {
         return;
     }
 
-    // 1. 정지 화면을 그대로 깐다.
-    BitBlt(dc, dirty.left, dirty.top, dirtyWidth, dirtyHeight, frame_->Dc(), dirty.left,
-           dirty.top, SRCCOPY);
-
+    // 어두운 사본이 없으면(만들기 실패) 원본으로 대신한다.
+    // 어둡게는 안 되지만 선택은 그대로 할 수 있다.
+    HDC dimSource = frame_->DimDc() != nullptr ? frame_->DimDc() : frame_->Dc();
     const RECT selection = ToClient(selection_);
 
-    // 2. 선택 영역 밖을 어둡게 한다. 무효 영역에서 선택 영역을 뺀 조각들이다.
-    if (dimDc_) {
-        BLENDFUNCTION blend{};
-        blend.BlendOp = AC_SRC_OVER;
-        blend.SourceConstantAlpha = kDimAlpha;
+    RECT overlap{};
+    const bool hasSelection = IntersectRect(&overlap, &dirty, &selection) != FALSE;
 
-        RECT overlap{};
-        RECT pieces[4]{};
-        int pieceCount = 0;
-        if (IntersectRect(&overlap, &dirty, &selection)) {
-            pieces[pieceCount++] = RECT{dirty.left, dirty.top, dirty.right, overlap.top};
-            pieces[pieceCount++] = RECT{dirty.left, overlap.bottom, dirty.right, dirty.bottom};
-            pieces[pieceCount++] = RECT{dirty.left, overlap.top, overlap.left, overlap.bottom};
-            pieces[pieceCount++] = RECT{overlap.right, overlap.top, dirty.right, overlap.bottom};
-        } else {
-            pieces[pieceCount++] = dirty;
+    // 1. 선택 영역 밖: 어두운 사본을 그대로 깐다.
+    //    무효 영역에서 선택 영역을 뺀 조각들이다. 조각끼리 겹치지 않으므로
+    //    픽셀마다 정확히 한 번만 쓴다.
+    RECT pieces[4]{};
+    int pieceCount = 0;
+    if (hasSelection) {
+        pieces[pieceCount++] = RECT{dirty.left, dirty.top, dirty.right, overlap.top};
+        pieces[pieceCount++] = RECT{dirty.left, overlap.bottom, dirty.right, dirty.bottom};
+        pieces[pieceCount++] = RECT{dirty.left, overlap.top, overlap.left, overlap.bottom};
+        pieces[pieceCount++] = RECT{overlap.right, overlap.top, dirty.right, overlap.bottom};
+    } else {
+        pieces[pieceCount++] = dirty;
+    }
+    for (int i = 0; i < pieceCount; ++i) {
+        const RECT& piece = pieces[i];
+        const int w = static_cast<int>(piece.right - piece.left);
+        const int h = static_cast<int>(piece.bottom - piece.top);
+        if (w > 0 && h > 0) {
+            BitBlt(dc, piece.left, piece.top, w, h, dimSource, piece.left, piece.top, SRCCOPY);
         }
-        for (int i = 0; i < pieceCount; ++i) {
-            const RECT& piece = pieces[i];
-            const int w = static_cast<int>(piece.right - piece.left);
-            const int h = static_cast<int>(piece.bottom - piece.top);
-            if (w > 0 && h > 0) {
-                AlphaBlend(dc, piece.left, piece.top, w, h, dimDc_.get(), 0, 0, 1, 1, blend);
-            }
+    }
+
+    // 2. 선택 영역 안: 원본을 그대로 깐다.
+    if (hasSelection) {
+        const int w = static_cast<int>(overlap.right - overlap.left);
+        const int h = static_cast<int>(overlap.bottom - overlap.top);
+        if (w > 0 && h > 0) {
+            BitBlt(dc, overlap.left, overlap.top, w, h, frame_->Dc(), overlap.left,
+                   overlap.top, SRCCOPY);
         }
     }
 
@@ -282,7 +268,7 @@ void Overlay::Paint(HDC dc, const RECT& dirty) const {
         return;
     }
 
-    // 3. 테두리.
+    // 3. 테두리. 1~2px이라 겹쳐 그려도 눈에 띄지 않는다.
     RECT outer = selection;
     InflateRect(&outer, 2, 2);
     DrawBorder(dc, outer, kBorderOuter, 1);
@@ -295,17 +281,18 @@ void Overlay::Paint(HDC dc, const RECT& dirty) const {
         return;
     }
     wchar_t text[64];
-    if (swprintf_s(text, L"%ld x %ld", selection.right - selection.left,
-                   selection.bottom - selection.top) < 0) {
+    const int length = swprintf_s(text, L"%ld x %ld", selection.right - selection.left,
+                                  selection.bottom - selection.top);
+    if (length < 0) {
         return;
     }
 
     auto fontScope = wil::SelectObject(dc, labelFont_.get());
-    RECT measure{0, 0, 0, 0};
-    DrawTextW(dc, text, -1, &measure, DT_CALCRECT | DT_SINGLELINE | DT_NOPREFIX);
+    SIZE textSize{};
+    GetTextExtentPoint32W(dc, text, length, &textSize);
 
-    const LONG boxWidth = (measure.right - measure.left) + kLabelPadding * 2;
-    const LONG boxHeight = (measure.bottom - measure.top) + kLabelPadding;
+    const LONG boxWidth = textSize.cx + kLabelPaddingX * 2;
+    const LONG boxHeight = textSize.cy + kLabelPaddingY * 2;
 
     // 기본은 사각형 아래 왼쪽 맞춤. 화면 밖으로 나가면 안쪽으로 접는다.
     RECT box{selection.left, selection.bottom + kLabelGap, selection.left + boxWidth,
@@ -327,12 +314,15 @@ void Overlay::Paint(HDC dc, const RECT& dirty) const {
         box.left = 0;
     }
 
-    FillRectColor(dc, box, kLabelBack);
-    const int oldMode = SetBkMode(dc, TRANSPARENT);
+    // 배경과 글자를 한 번에 쓴다. 배경을 칠한 뒤 글자를 얹으면 두 번 쓰게 된다.
+    const COLORREF oldBk = SetBkColor(dc, kLabelBack);
     const COLORREF oldText = SetTextColor(dc, kLabelText);
-    DrawTextW(dc, text, -1, &box, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
-    SetTextColor(dc, oldText);
+    const int oldMode = SetBkMode(dc, OPAQUE);
+    ExtTextOutW(dc, box.left + kLabelPaddingX, box.top + kLabelPaddingY, ETO_OPAQUE, &box, text,
+                static_cast<UINT>(length), nullptr);
     SetBkMode(dc, oldMode);
+    SetTextColor(dc, oldText);
+    SetBkColor(dc, oldBk);
 }
 
 }  // namespace sc

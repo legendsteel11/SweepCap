@@ -30,6 +30,9 @@ private:
 }  // namespace
 
 void FrozenFrame::Reset() {
+    dimSelection_.reset();
+    dimBitmap_.reset();
+    dimDc_.reset();
     selection_.reset();
     bitmap_.reset();
     memDc_.reset();
@@ -96,13 +99,41 @@ bool FrozenFrame::GrabPixels() {
         GdiFlush();
     }
 
+    const double blitMs = watch.ElapsedMs();
+
+    // 어둡게 만든 사본을 만든다. 오버레이가 선택 영역 밖에 이걸 그대로 깐다.
+    //
+    // 정확히 절반으로 낮춘다. 시프트 하나와 마스크 하나면 끝나서 곱셈 없이
+    // 빠르다. 64비트씩 묶어 반복 횟수를 절반으로 줄인다.
+    void* dimBits = nullptr;
+    wil::unique_hbitmap dimDib{
+        CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &dimBits, nullptr, 0)};
+    if (dimDib && dimBits != nullptr) {
+        const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
+        const auto* src = static_cast<const uint64_t*>(bits);
+        auto* dst = static_cast<uint64_t*>(dimBits);
+        const size_t pairs = pixelCount / 2;
+        for (size_t i = 0; i < pairs; ++i) {
+            dst[i] = ((src[i] >> 1) & 0x7F7F7F7F7F7F7F7Full) | 0xFF000000FF000000ull;
+        }
+        if ((pixelCount & 1u) != 0) {
+            const auto* src32 = static_cast<const uint32_t*>(bits);
+            auto* dst32 = static_cast<uint32_t*>(dimBits);
+            dst32[pixelCount - 1] = ((src32[pixelCount - 1] >> 1) & 0x7F7F7F7Fu) | 0xFF000000u;
+        }
+        dimBitmap_ = std::move(dimDib);
+    } else {
+        SC_LOG(L"[캡처] 어둡게 만든 사본 생성 실패 err=%lu", GetLastError());
+    }
+
     bitmap_ = std::move(dib);
     pixels_ = static_cast<uint32_t*>(bits);
     bounds_ = bounds;
     grabbedAt_ = GetTickCount64();
 
-    SC_LOG(L"[캡처] 화면 읽기 %dx%d (%.1f MB) %.2f ms", width, height,
-           static_cast<double>(width) * height * 4.0 / (1024.0 * 1024.0), watch.ElapsedMs());
+    SC_LOG(L"[캡처] 화면 읽기 %dx%d (%.1f MB) %.2f ms (BitBlt %.2f / 어둡게 %.2f)", width,
+           height, static_cast<double>(width) * height * 4.0 / (1024.0 * 1024.0),
+           watch.ElapsedMs(), blitMs, watch.ElapsedMs() - blitMs);
     return true;
 }
 
@@ -122,6 +153,14 @@ bool FrozenFrame::AttachDc() {
     }
     selection_ = wil::SelectObject(memDc.get(), bitmap_.get());
     memDc_ = std::move(memDc);
+
+    if (dimBitmap_) {
+        wil::unique_hdc dim{CreateCompatibleDC(screenDc.get())};
+        if (dim) {
+            dimSelection_ = wil::SelectObject(dim.get(), dimBitmap_.get());
+            dimDc_ = std::move(dim);
+        }
+    }
     return true;
 }
 
