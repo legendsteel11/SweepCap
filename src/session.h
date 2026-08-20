@@ -6,6 +6,7 @@
 
 #include "capture.h"
 #include "overlay.h"
+#include "windowpick.h"
 
 namespace sc {
 
@@ -43,6 +44,7 @@ public:
 
 private:
     RECT CurrentSelection() const;
+    bool WindowLatched() const;
     void Teardown();
 
     std::unique_ptr<FrozenFrame> frame_;
@@ -56,6 +58,14 @@ private:
     // monitors sit at odd offsets from the virtual desktop origin.
     bool snapEnabled_ = false;
     POINT gridOrigin_{};
+
+    // Whole-window pick. Looked up once when the drag starts, from the grid
+    // cell the drag began in. It stays selected while the cursor remains in
+    // that cell, and leaving the cell hands control back to a normal drag, so
+    // the gesture never traps the user in a selection they did not want.
+    RECT startCell_{};
+    WindowPick pick_{};
+    bool hasPick_ = false;
 };
 
 // Timer used to watch for Escape during a drag. No keyboard hook is installed,

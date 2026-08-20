@@ -44,6 +44,7 @@ add_executable(sweepcap WIN32
     src/overlay.cpp
     src/session.cpp
     src/tray.cpp
+    src/windowpick.cpp
     res/sweepcap.rc
 )
 

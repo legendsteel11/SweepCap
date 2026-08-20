@@ -10,6 +10,7 @@
 #include "hook.h"
 #include "log.h"
 #include "output.h"
+#include "windowpick.h"
 
 namespace sc {
 namespace {
@@ -58,6 +59,21 @@ LONG SnapToGrid(LONG value, LONG origin, LONG pitch) {
     }
     const LONG lower = origin + cells * pitch;
     return (value - lower) * 2 >= pitch ? lower + pitch : lower;
+}
+
+// The grid cell a point falls in.
+RECT CellAt(POINT pt, POINT origin, LONG pitch) {
+    const auto floorDiv = [pitch](LONG v) {
+        LONG q = v / pitch;
+        if (v % pitch != 0 && v < 0) {
+            --q;
+        }
+        return q;
+    };
+    const LONG cx = floorDiv(pt.x - origin.x);
+    const LONG cy = floorDiv(pt.y - origin.y);
+    return RECT{origin.x + cx * pitch, origin.y + cy * pitch, origin.x + (cx + 1) * pitch,
+                origin.y + (cy + 1) * pitch};
 }
 
 // Top-left of the monitor a point sits on. Snapping is anchored here rather
@@ -144,7 +160,20 @@ void CaptureSession::DropPrewarm() {
     g_prewarmed.reset();
 }
 
+bool CaptureSession::WindowLatched() const {
+    if (!hasPick_) {
+        return false;
+    }
+    // The pick holds while the cursor is still in the cell the drag started in.
+    const POINT current = hook::Current();
+    return PtInRect(&startCell_, current) != FALSE;
+}
+
 RECT CaptureSession::CurrentSelection() const {
+    if (WindowLatched()) {
+        return pick_.frame;
+    }
+
     const RECT raw = MakeRect(hook::Anchor(), hook::Current());
     if (!snapEnabled_) {
         return raw;
@@ -184,7 +213,7 @@ void CaptureSession::RefreshSnapState() {
         return;
     }
     snapEnabled_ = held;
-    overlay_.SetSelection(CurrentSelection());
+    overlay_.SetSelection(CurrentSelection(), WindowLatched());
 }
 
 void CaptureSession::Begin(HWND owner) {
@@ -214,15 +243,37 @@ void CaptureSession::Begin(HWND owner) {
         }
     }
 
+    snapEnabled_ = config::SnapModifierHeld();
+    gridOrigin_ = MonitorOriginFor(anchor);
+    startCell_ = CellAt(anchor, gridOrigin_, config::kGridSizePx);
+
+    // Look for a window corner in the starting cell. Only while snapping,
+    // because the cell only means anything when the grid is in play.
+    //
+    // This has to happen before the overlay goes up. The exposure test asks
+    // WindowFromPoint what owns the corner pixel, and once the overlay covers
+    // the screen the answer is always the overlay.
+    hasPick_ = false;
+    pick_ = WindowPick{};
+    if (snapEnabled_) {
+        const Stopwatch pickWatch;
+        hasPick_ = PickWindowByCorner(startCell_, &pick_);
+        if (hasPick_) {
+            SC_LOG(L"[세션] 시작 칸에서 창을 찾았다 (%.2f ms) %ldx%ld 모서리 반지름 %d",
+                   pickWatch.ElapsedMs(), pick_.frame.right - pick_.frame.left,
+                   pick_.frame.bottom - pick_.frame.top, pick_.cornerRadius);
+        }
+    }
+
     if (!frame_->AttachDc() || !overlay_.Show(*frame_, anchor)) {
         SC_LOG(L"[세션] 오버레이 표시 실패. 접는다.");
         hook::CancelDrag();
         Teardown();
         return;
     }
-
-    snapEnabled_ = config::SnapModifierHeld();
-    gridOrigin_ = MonitorOriginFor(anchor);
+    if (hasPick_) {
+        overlay_.SetSelection(pick_.frame, true);
+    }
 
     active_ = true;
     SetTimer(owner_, kEscapeTimerId, kEscapeTimerMs, nullptr);
@@ -235,7 +286,7 @@ void CaptureSession::Update() {
         return;
     }
     snapEnabled_ = config::SnapModifierHeld();
-    overlay_.SetSelection(CurrentSelection());
+    overlay_.SetSelection(CurrentSelection(), WindowLatched());
 }
 
 void CaptureSession::Finish(HWND owner) {
@@ -243,6 +294,7 @@ void CaptureSession::Finish(HWND owner) {
         return;
     }
 
+    const bool windowPick = WindowLatched();
     const RECT selection = CurrentSelection();
     const POINT anchor = hook::Anchor();
     const POINT current = hook::Current();
@@ -254,9 +306,9 @@ void CaptureSession::Finish(HWND owner) {
     // but clearing the screen sooner is what makes it feel immediate.
     overlay_.Hide();
 
-    if (distance < config::kMinDragPixels) {
-        // A later stage turns this range into window-fit capture. For now it
-        // counts as an accidental trigger.
+    // A whole-window pick is deliberate even without any movement, so the
+    // accidental-trigger threshold does not apply to it.
+    if (!windowPick && distance < config::kMinDragPixels) {
         SC_LOG(L"[세션] 드래그가 %.0fpx뿐이다 (최소 %d). 취소한다.", distance,
                config::kMinDragPixels);
         Teardown();
@@ -264,7 +316,12 @@ void CaptureSession::Finish(HWND owner) {
     }
 
     const Stopwatch cropWatch;
-    const Bitmap32 shot = frame_->Crop(selection);
+    Bitmap32 shot = frame_->Crop(selection);
+    if (windowPick) {
+        // Windows 11 rounds window corners, so a straight rectangular crop
+        // brings the background along in all four of them.
+        CarveRoundedCorners(shot, pick_.cornerRadius);
+    }
     if (!shot.Valid()) {
         SC_LOG(L"[세션] 잘라내기 실패 rect=(%ld,%ld,%ld,%ld)", selection.left, selection.top,
                selection.right, selection.bottom);
@@ -294,8 +351,10 @@ void CaptureSession::Finish(HWND owner) {
         saveMs = watch.ElapsedMs();
     }
 
-    SC_LOG(L"[세션] 완료 %dx%d  잘라내기 %.2f / 인코딩 %.2f / 클립보드 %.2f / 저장 %.2f ms",
-           shot.width, shot.height, cropMs, encodeMs, clipboardMs, saveMs);
+    SC_LOG(L"[세션] 완료 %dx%d (%s)  잘라내기 %.2f / 인코딩 %.2f / 클립보드 %.2f / 저장 %.2f ms",
+           shot.width, shot.height,
+           windowPick ? L"창 영역" : (snapEnabled_ ? L"격자" : L"자유"), cropMs, encodeMs,
+           clipboardMs, saveMs);
     SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
            clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
            saveOk ? path.c_str() : L"");
@@ -317,6 +376,8 @@ void CaptureSession::Teardown() {
     }
     overlay_.Hide();
     frame_.reset();
+    hasPick_ = false;
+    pick_ = WindowPick{};
     active_ = false;
 }
 

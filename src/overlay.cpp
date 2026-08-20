@@ -17,6 +17,10 @@ constexpr wchar_t kOverlayClass[] = L"SweepCap.Overlay";
 constexpr COLORREF kBorderInner = RGB(255, 255, 255);
 constexpr COLORREF kBorderOuter = RGB(0, 0, 0);
 
+// A whole-window selection uses the accent colour instead, so the change of
+// mode is visible without reading the size readout.
+constexpr COLORREF kBorderWindow = RGB(96, 156, 255);
+
 // Size readout.
 constexpr COLORREF kLabelBack = RGB(24, 24, 28);
 constexpr COLORREF kLabelText = RGB(255, 255, 255);
@@ -158,6 +162,7 @@ bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
 
     frame_ = &frame;
     selection_ = RECT{anchor.x, anchor.y, anchor.x, anchor.y};
+    windowMode_ = false;
 
     // Build the font for the DPI of the monitor under the cursor. A window
     // spanning monitors of different DPI has no single right answer, so the
@@ -215,7 +220,7 @@ void Overlay::InvalidateForSelection(const RECT& before, const RECT& after) cons
     }
 }
 
-void Overlay::SetSelection(const RECT& selection) {
+void Overlay::SetSelection(const RECT& selection, bool windowMode) {
     if (!visible_ || !hwnd_) {
         return;
     }
@@ -226,11 +231,12 @@ void Overlay::SetSelection(const RECT& selection) {
     if (normalized.top > normalized.bottom) {
         std::swap(normalized.top, normalized.bottom);
     }
-    if (EqualRect(&normalized, &selection_)) {
+    if (EqualRect(&normalized, &selection_) && windowMode == windowMode_) {
         return;
     }
     const RECT before = selection_;
     selection_ = normalized;
+    windowMode_ = windowMode;
     InvalidateForSelection(before, selection_);
     UpdateWindow(hwnd_);
 }
@@ -332,8 +338,9 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
 
         // 3. Border, inner 1px.
         count = SubtractRect(ringMid, sel, pieces);
+        const COLORREF innerColor = windowMode_ ? kBorderWindow : kBorderInner;
         for (int i = 0; i < count; ++i) {
-            FillRectColor(dc, pieces[i], kBorderInner);
+            FillRectColor(dc, pieces[i], innerColor);
         }
 
         // 4. Inside the selection: the original.

@@ -33,7 +33,11 @@ public:
 
     // frame must outlive the call to Hide().
     bool Show(const FrozenFrame& frame, POINT anchor);
-    void SetSelection(const RECT& selection);  // virtual desktop coordinates
+
+    // selection is in virtual desktop coordinates. windowMode tints the border
+    // so it is obvious that a whole window is selected rather than a rectangle
+    // the user dragged.
+    void SetSelection(const RECT& selection, bool windowMode);
     void Hide();
     bool Visible() const { return visible_; }
 
@@ -48,6 +52,7 @@ private:
     const FrozenFrame* frame_ = nullptr;
     RECT selection_{};
     bool visible_ = false;
+    bool windowMode_ = false;
 
     wil::unique_hfont labelFont_;
 };
