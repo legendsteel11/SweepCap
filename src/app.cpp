@@ -247,6 +247,51 @@ void ChangeCaptureFolder(HWND owner) {
     settings::SetCaptureRoot(path.get());
 }
 
+// The same failure is not reported again inside this window.
+//
+// Whatever breaks a save (a folder that is gone, a full disk, a denied
+// permission) breaks the next one too, and a capture takes well under a second
+// here. Without this, a broken folder turns a burst of captures into a queue of
+// balloons that keeps appearing long after the user has stopped. Telling them
+// once is the whole value; repeating it is only noise.
+//
+// A different failure reports immediately, so a new problem is never hidden
+// behind an old one.
+constexpr ULONGLONG kFailureRepeatMs = 30000;
+ULONGLONG g_lastFailureAt = 0;
+WPARAM g_lastFailureKind = 0;
+
+// Says which part of the delivery failed, so the user knows whether the
+// capture is lost or still sitting somewhere usable.
+void ReportDeliveryFailure(WPARAM failures) {
+    const ULONGLONG now = GetTickCount64();
+    if (failures == g_lastFailureKind && now - g_lastFailureAt < kFailureRepeatMs) {
+        SC_LOG(L"[알림] 같은 실패가 %llu ms 안에 반복됐다. 알림을 생략한다.",
+               now - g_lastFailureAt);
+        return;
+    }
+    g_lastFailureKind = failures;
+    g_lastFailureAt = now;
+
+    UINT id = IDS_ERR_DELIVERY_ALL;
+    if ((failures & kDeliveryCaptureFailed) != 0) {
+        id = IDS_ERR_CAPTURE_NONE;
+    } else if ((failures & kDeliverySaveFailed) != 0 &&
+               (failures & kDeliveryClipboardFailed) == 0) {
+        id = IDS_ERR_SAVE_ONLY;
+    } else if ((failures & kDeliveryClipboardFailed) != 0 &&
+               (failures & kDeliverySaveFailed) == 0) {
+        id = IDS_ERR_CLIP_ONLY;
+    }
+
+    // Separate buffers: one call cannot fill the same one twice.
+    wchar_t title[64];
+    wchar_t text[256];
+    g_tray.ShowBalloon(
+        LoadText(IDS_ERR_CAPTURE_TITLE, L"Capture failed", title, ARRAYSIZE(title)),
+        LoadText(id, L"The capture could not be delivered.", text, ARRAYSIZE(text)));
+}
+
 void ToggleRunAtStartup(HWND owner) {
     const bool next = !settings::RunAtStartup();
     if (settings::SetRunAtStartup(next)) {
@@ -374,6 +419,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
             return 0;
         }
+
+        case WM_SC_DELIVERY_FAILED:
+            ReportDeliveryFailure(wparam);
+            return 0;
 
         case WM_COMMAND: {
             // The radio submenus carry their index in the command id, so the

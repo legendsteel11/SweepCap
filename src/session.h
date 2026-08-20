@@ -90,6 +90,20 @@ private:
     ULONGLONG dragStartedAt_ = 0;
 };
 
+// Posted when a capture could not be delivered. wParam carries the failures as
+// a combination of the bits below.
+//
+// The session raises it rather than showing anything itself: the tray icon
+// belongs to the application, and routing through the message loop keeps this
+// out of the path that has to stay fast.
+constexpr UINT WM_SC_DELIVERY_FAILED = WM_APP + 20;
+
+enum DeliveryFailure : WPARAM {
+    kDeliveryClipboardFailed = 1 << 0,
+    kDeliverySaveFailed = 1 << 1,
+    kDeliveryCaptureFailed = 1 << 2,  // nothing was produced to deliver
+};
+
 // Timer used to watch for Escape during a drag. No keyboard hook is installed,
 // so the message loop polls GetAsyncKeyState instead.
 constexpr UINT_PTR kEscapeTimerId = 1;

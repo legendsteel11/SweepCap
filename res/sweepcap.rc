@@ -37,6 +37,12 @@ BEGIN
     IDS_FOLDER_PICK_TITLE   "캡처를 저장할 폴더 선택"
     IDS_ERR_STARTUP         "부팅 시 시작을 변경하지 못했습니다."
 
+    IDS_ERR_CAPTURE_TITLE   "캡처 실패"
+    IDS_ERR_SAVE_ONLY       "파일로 저장하지 못했습니다. 클립보드에는 복사되었습니다."
+    IDS_ERR_CLIP_ONLY       "클립보드에 복사하지 못했습니다. 파일로는 저장되었습니다."
+    IDS_ERR_DELIVERY_ALL    "저장과 클립보드 복사가 모두 실패했습니다."
+    IDS_ERR_CAPTURE_NONE    "캡처 이미지를 만들지 못했습니다."
+
     IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
     IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
     IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"

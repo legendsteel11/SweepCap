@@ -39,6 +39,14 @@
 #define IDS_FOLDER_PICK_TITLE   1017
 #define IDS_ERR_STARTUP         1018
 
+// Shown when a capture could not be delivered. Which one depends on what
+// still worked, so the user knows whether the capture is lost.
+#define IDS_ERR_CAPTURE_TITLE 1020
+#define IDS_ERR_SAVE_ONLY     1021
+#define IDS_ERR_CLIP_ONLY     1022
+#define IDS_ERR_DELIVERY_ALL  1023
+#define IDS_ERR_CAPTURE_NONE  1024
+
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030
 #define IDS_GESTURE_CTRL_WIN       1031

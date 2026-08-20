@@ -24,6 +24,15 @@ public:
     bool Restore();
     void Remove();
 
+    // Balloon over the tray icon. Used only to report that a capture could not
+    // be delivered, which is rare enough that it never becomes noise.
+    //
+    // Windows can suppress this: notifications turned off for the application,
+    // or focus assist. There is no reliable way to tell that it was swallowed,
+    // and the alternative of a message box would steal focus from whatever the
+    // capture was taken of.
+    bool ShowBalloon(const wchar_t* title, const wchar_t* text);
+
     UINT IconId() const { return iconId_; }
 
 private:

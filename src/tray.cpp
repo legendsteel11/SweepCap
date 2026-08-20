@@ -81,6 +81,30 @@ bool Tray::Restore() {
     return ok;
 }
 
+bool Tray::ShowBalloon(const wchar_t* title, const wchar_t* text) {
+    if (!added_ || title == nullptr || text == nullptr) {
+        return false;
+    }
+
+    NOTIFYICONDATAW nid{};
+    nid.cbSize = sizeof(nid);
+    nid.hWnd = owner_;
+    nid.uID = iconId_;
+    nid.uFlags = NIF_INFO;
+    // NIIF_WARNING draws the system warning glyph. NIIF_NOSOUND is deliberately
+    // not set: this only appears when a capture was lost, which is worth a
+    // sound.
+    nid.dwInfoFlags = NIIF_WARNING;
+    wcscpy_s(nid.szInfoTitle, ARRAYSIZE(nid.szInfoTitle), title);
+    wcscpy_s(nid.szInfo, ARRAYSIZE(nid.szInfo), text);
+
+    if (!Shell_NotifyIconW(NIM_MODIFY, &nid)) {
+        SC_LOG(L"Shell_NotifyIcon(NIF_INFO) 실패 err=%lu", GetLastError());
+        return false;
+    }
+    return true;
+}
+
 void Tray::Remove() {
     if (!added_) {
         return;

@@ -367,6 +367,9 @@ void CaptureSession::Finish(HWND owner) {
     if (!shot.Valid()) {
         SC_LOG(L"[세션] 잘라내기 실패 rect=(%ld,%ld,%ld,%ld)", selection.left, selection.top,
                selection.right, selection.bottom);
+        if (host_ != nullptr) {
+            PostMessageW(host_, WM_SC_DELIVERY_FAILED, kDeliveryCaptureFailed, 0);
+        }
         Teardown();
         return;
     }
@@ -400,6 +403,23 @@ void CaptureSession::Finish(HWND owner) {
     SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
            clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
            saveOk ? path.c_str() : L"");
+
+    // Say so when a capture did not arrive anywhere. Release builds compile
+    // every SC_LOG away, so without this a failed save is indistinguishable
+    // from a successful one: the overlay disappears either way.
+    WPARAM failures = 0;
+    if (config::kCopyToClipboard && !clipboardOk) {
+        failures |= kDeliveryClipboardFailed;
+    }
+    if (config::kSaveToFile && !saveOk) {
+        failures |= kDeliverySaveFailed;
+    }
+    if (png.empty()) {
+        failures |= kDeliveryCaptureFailed;
+    }
+    if (failures != 0 && host_ != nullptr) {
+        PostMessageW(host_, WM_SC_DELIVERY_FAILED, failures, 0);
+    }
 
     Teardown();
 }
