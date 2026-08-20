@@ -26,6 +26,22 @@ BEGIN
     IDS_MENU_DUMP  "좌표 로그 남기기"
     IDS_ERR_TRAY   "트레이 아이콘을 등록하지 못했습니다."
     IDS_ERR_HOOK   "마우스 훅을 설치하지 못했습니다.\n영역 캡처가 동작하지 않습니다."
+
+    IDS_MENU_OPEN_FOLDER    "캡처 폴더 열기"
+    IDS_MENU_GESTURE        "단축키 변경"
+    IDS_MENU_GRID           "캡처 격자 크기"
+    IDS_MENU_FOLDER         "저장 폴더"
+    IDS_MENU_FOLDER_CHANGE  "변경..."
+    IDS_MENU_FOLDER_DEFAULT "기본 저장 폴더로 복원"
+    IDS_MENU_STARTUP        "부팅 시 시작"
+    IDS_FOLDER_PICK_TITLE   "캡처를 저장할 폴더 선택"
+    IDS_ERR_STARTUP         "부팅 시 시작을 변경하지 못했습니다."
+
+    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
+    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
+    IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"
+    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (격자 스냅 +Shift)"
+    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (격자 스냅 +Alt)"
 END
 
 /////////////////////////////////////////////////////////////////////////////

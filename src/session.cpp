@@ -10,6 +10,7 @@
 #include "hook.h"
 #include "log.h"
 #include "output.h"
+#include "settings.h"
 #include "windowpick.h"
 
 namespace sc {
@@ -193,7 +194,7 @@ RECT CaptureSession::RawOrSnapped() const {
         return raw;
     }
 
-    const LONG pitch = config::kGridSizePx;
+    const LONG pitch = settings::GridSizePx();
     RECT snapped{SnapToGrid(raw.left, gridOrigin_.x, pitch),
                  SnapToGrid(raw.top, gridOrigin_.y, pitch),
                  SnapToGrid(raw.right, gridOrigin_.x, pitch),
@@ -223,7 +224,7 @@ void CaptureSession::Tick() {
         return;
     }
     UpdatePickRelease();
-    const bool held = config::SnapModifierHeld();
+    const bool held = settings::SnapModifierHeld();
     const bool shown = WindowShown();
     if (held == snapEnabled_ && shown == windowShownLast_) {
         return;
@@ -260,9 +261,9 @@ void CaptureSession::Begin(HWND owner) {
         }
     }
 
-    snapEnabled_ = config::SnapModifierHeld();
+    snapEnabled_ = settings::SnapModifierHeld();
     gridOrigin_ = MonitorOriginFor(anchor);
-    startCell_ = CellAt(anchor, gridOrigin_, config::kGridSizePx);
+    startCell_ = CellAt(anchor, gridOrigin_, settings::GridSizePx());
 
     // Find what a release would capture. Three rules in order: the window under
     // the cursor, then a window with an exposed corner in the starting cell,
@@ -322,7 +323,7 @@ void CaptureSession::Update() {
         return;
     }
     UpdatePickRelease();
-    snapEnabled_ = config::SnapModifierHeld();
+    snapEnabled_ = settings::SnapModifierHeld();
     windowShownLast_ = WindowShown();
     overlay_.SetSelection(CurrentSelection(), windowShownLast_);
 }

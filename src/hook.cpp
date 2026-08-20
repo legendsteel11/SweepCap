@@ -5,8 +5,8 @@
 #include <atomic>
 #include <cstdint>
 
-#include "config.h"
 #include "log.h"
+#include "settings.h"
 
 namespace sc::hook {
 namespace {
@@ -94,7 +94,7 @@ LRESULT CALLBACK MouseProc(int code, WPARAM wparam, LPARAM lparam) {
             if (dragging) {
                 return 1;
             }
-            if (!config::ModifiersHeld()) {
+            if (!settings::ModifiersHeld()) {
                 break;
             }
             g_anchor.store(Pack(info->pt.x, info->pt.y), std::memory_order_release);

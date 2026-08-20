@@ -1,9 +1,13 @@
 #include "app.h"
 
 #include <shellapi.h>
+#include <shlobj.h>
 #include <windowsx.h>
 #include <shellscalingapi.h>
+#include <wil/com.h>
 #include <wil/resource.h>
+
+#include <string>
 
 #include "../res/resource.h"
 #include "app_name.h"
@@ -12,6 +16,7 @@
 #include "hook.h"
 #include "log.h"
 #include "session.h"
+#include "settings.h"
 #include "tray.h"
 
 namespace sc {
@@ -35,6 +40,104 @@ const wchar_t* LoadText(UINT id, const wchar_t* fallback, wchar_t* buffer, int c
     return buffer;
 }
 
+// Everything the user can change is a menu item.
+//
+// The settings are all single choices from a short list, which a radio
+// submenu shows and changes in one click while the current value is visible
+// without opening anything. A settings window would need two clicks more per
+// change and a second place for the same values to drift out of sync.
+
+// Keeps the tail of a long path, which is the part that says which folder it
+// is, and marks the cut so a shortened path is never mistaken for a real one.
+std::wstring ShortenPath(const std::wstring& path) {
+    constexpr size_t kMaxChars = 44;
+    if (path.size() <= kMaxChars) {
+        return path;
+    }
+    return L"..." + path.substr(path.size() - (kMaxChars - 3));
+}
+
+// Each builder keeps its own string buffer rather than borrowing the caller's.
+// Sharing one buffer with the caller is unsafe here: a builder and the
+// LoadText that reads the submenu's own title are arguments of the same call,
+// and the order those are evaluated in is not defined. Sharing the buffer put
+// the last item's text in the submenu title.
+
+wil::unique_hmenu BuildGestureMenu() {
+    wil::unique_hmenu menu{CreatePopupMenu()};
+    if (!menu) {
+        return {};
+    }
+    wchar_t label[256];
+    size_t total = 0;
+    const settings::Gesture* items = settings::Gestures(&total);
+    for (size_t i = 0; i < total; ++i) {
+        AppendMenuW(menu.get(), MF_STRING, IDM_GESTURE_FIRST + i,
+                    LoadText(items[i].labelId, L"Modifier", label, ARRAYSIZE(label)));
+    }
+    const UINT current = IDM_GESTURE_FIRST + static_cast<UINT>(settings::GestureIndex());
+    CheckMenuRadioItem(menu.get(), IDM_GESTURE_FIRST,
+                       IDM_GESTURE_FIRST + static_cast<UINT>(total) - 1, current,
+                       MF_BYCOMMAND);
+    return menu;
+}
+
+wil::unique_hmenu BuildGridMenu() {
+    wil::unique_hmenu menu{CreatePopupMenu()};
+    if (!menu) {
+        return {};
+    }
+    size_t total = 0;
+    const int* choices = settings::GridChoices(&total);
+    UINT current = IDM_GRID_FIRST;
+    for (size_t i = 0; i < total; ++i) {
+        // A pixel count is the same in every language, so it is formatted here
+        // rather than held as one string resource per value.
+        wchar_t label[32];
+        if (swprintf_s(label, L"%d px", choices[i]) < 0) {
+            continue;
+        }
+        AppendMenuW(menu.get(), MF_STRING, IDM_GRID_FIRST + i, label);
+        if (choices[i] == settings::GridSizePx()) {
+            current = IDM_GRID_FIRST + static_cast<UINT>(i);
+        }
+    }
+    CheckMenuRadioItem(menu.get(), IDM_GRID_FIRST,
+                       IDM_GRID_FIRST + static_cast<UINT>(total) - 1, current, MF_BYCOMMAND);
+    return menu;
+}
+
+wil::unique_hmenu BuildFolderMenu() {
+    wil::unique_hmenu menu{CreatePopupMenu()};
+    if (!menu) {
+        return {};
+    }
+    wchar_t label[256];
+    // The current folder heads the submenu as a greyed line. It is the one
+    // setting whose value is a path, so a checkmark cannot express it.
+    AppendMenuW(menu.get(), MF_STRING | MF_GRAYED, 0,
+                ShortenPath(settings::CaptureRoot()).c_str());
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu.get(), MF_STRING, IDM_FOLDER_CHANGE,
+                LoadText(IDS_MENU_FOLDER_CHANGE, L"Change...", label, ARRAYSIZE(label)));
+    AppendMenuW(
+        menu.get(), MF_STRING | (settings::CaptureRootIsDefault() ? MF_GRAYED : 0),
+        IDM_FOLDER_DEFAULT,
+        LoadText(IDS_MENU_FOLDER_DEFAULT, L"Restore default folder", label, ARRAYSIZE(label)));
+    return menu;
+}
+
+// MF_POPUP hands the submenu to the parent, which destroys it in turn, so the
+// wrapper has to let go of it.
+void AttachSubmenu(HMENU parent, wil::unique_hmenu submenu, const wchar_t* label) {
+    if (!submenu) {
+        return;
+    }
+    if (AppendMenuW(parent, MF_POPUP, reinterpret_cast<UINT_PTR>(submenu.get()), label)) {
+        submenu.release();
+    }
+}
+
 void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     wil::unique_hmenu menu{CreatePopupMenu()};
     if (!menu) {
@@ -43,12 +146,30 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
 
     wchar_t text[256];
 
+    AppendMenuW(menu.get(), MF_STRING, IDM_OPEN_FOLDER,
+                LoadText(IDS_MENU_OPEN_FOLDER, L"Open capture folder", text, ARRAYSIZE(text)));
+    SetMenuDefaultItem(menu.get(), IDM_OPEN_FOLDER, FALSE);
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+
+    AttachSubmenu(menu.get(), BuildGestureMenu(),
+                  LoadText(IDS_MENU_GESTURE, L"Change shortcut", text, ARRAYSIZE(text)));
+    AttachSubmenu(menu.get(), BuildGridMenu(),
+                  LoadText(IDS_MENU_GRID, L"Capture grid size", text, ARRAYSIZE(text)));
+    AttachSubmenu(menu.get(), BuildFolderMenu(),
+                  LoadText(IDS_MENU_FOLDER, L"Save folder", text, ARRAYSIZE(text)));
+
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu.get(), MF_STRING | (settings::RunAtStartup() ? MF_CHECKED : MF_UNCHECKED),
+                IDM_RUN_AT_STARTUP,
+                LoadText(IDS_MENU_STARTUP, L"Run at startup", text, ARRAYSIZE(text)));
+
 #if defined(_DEBUG)
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_DUMP_GEOMETRY,
                 LoadText(IDS_MENU_DUMP, L"Write coordinate log", text, ARRAYSIZE(text)));
-    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
 #endif
 
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_EXIT,
                 LoadText(IDS_MENU_EXIT, L"Exit", text, ARRAYSIZE(text)));
 
@@ -58,6 +179,85 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     TrackPopupMenuEx(menu.get(), TPM_RIGHTBUTTON | TPM_BOTTOMALIGN, screenPoint.x,
                      screenPoint.y, hwnd, nullptr);
     PostMessageW(hwnd, WM_NULL, 0, 0);
+}
+
+// Opens today's folder when there is one, and the root otherwise, since that
+// is where the next capture will land.
+void OpenCaptureFolder() {
+    const std::wstring& root = settings::CaptureRoot();
+    if (root.empty()) {
+        return;
+    }
+    SYSTEMTIME now{};
+    GetLocalTime(&now);
+
+    wchar_t today[MAX_PATH];
+    if (swprintf_s(today, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
+                   now.wDay) >= 0 &&
+        GetFileAttributesW(today) != INVALID_FILE_ATTRIBUTES) {
+        ShellExecuteW(nullptr, L"open", today, nullptr, nullptr, SW_SHOWNORMAL);
+        return;
+    }
+    // Before the first capture of the day the root may not exist yet.
+    SHCreateDirectoryExW(nullptr, root.c_str(), nullptr);
+    ShellExecuteW(nullptr, L"open", root.c_str(), nullptr, nullptr, SW_SHOWNORMAL);
+}
+
+void ChangeCaptureFolder(HWND owner) {
+    auto dialog = wil::CoCreateInstanceNoThrow<IFileOpenDialog>(CLSID_FileOpenDialog);
+    if (!dialog) {
+        SC_LOG(L"[설정] 폴더 선택 대화상자를 만들지 못했다.");
+        return;
+    }
+
+    DWORD options = 0;
+    if (SUCCEEDED(dialog->GetOptions(&options))) {
+        // FORCEFILESYSTEM keeps the result to somewhere that has a real path;
+        // without it a virtual shell location can be chosen and then not
+        // written to.
+        dialog->SetOptions(options | FOS_PICKFOLDERS | FOS_FORCEFILESYSTEM |
+                           FOS_PATHMUSTEXIST);
+    }
+
+    wchar_t text[256];
+    dialog->SetTitle(
+        LoadText(IDS_FOLDER_PICK_TITLE, L"Choose where captures are saved", text,
+                 ARRAYSIZE(text)));
+
+    // Start where captures currently go, so this reads as changing the folder
+    // rather than choosing one from nothing.
+    wil::com_ptr_nothrow<IShellItem> start;
+    if (SUCCEEDED(SHCreateItemFromParsingName(settings::CaptureRoot().c_str(), nullptr,
+                                              IID_PPV_ARGS(&start)))) {
+        dialog->SetFolder(start.get());
+    }
+
+    // The owner window is hidden, so the dialog needs help reaching the front.
+    SetForegroundWindow(owner);
+    if (FAILED(dialog->Show(owner))) {
+        return;  // cancelled
+    }
+
+    wil::com_ptr_nothrow<IShellItem> item;
+    wil::unique_cotaskmem_string path;
+    if (FAILED(dialog->GetResult(&item)) ||
+        FAILED(item->GetDisplayName(SIGDN_FILESYSPATH, &path))) {
+        return;
+    }
+    settings::SetCaptureRoot(path.get());
+}
+
+void ToggleRunAtStartup(HWND owner) {
+    const bool next = !settings::RunAtStartup();
+    if (settings::SetRunAtStartup(next)) {
+        SC_LOG(L"[설정] 부팅 시 시작 %s", next ? L"활성화" : L"비활성화");
+        return;
+    }
+    wchar_t text[256];
+    MessageBoxW(owner,
+                LoadText(IDS_ERR_STARTUP, L"Could not change the startup entry.", text,
+                         ARRAYSIZE(text)),
+                SWEEPCAP_NAME_W, MB_OK | MB_ICONWARNING);
 }
 
 void DumpGeometryAndOpenLog() {
@@ -86,7 +286,7 @@ ULONGLONG g_lastPrewarm = 0;
 
 void PollModifiers(HWND hwnd) {
     const ULONGLONG now = GetTickCount64();
-    const bool held = config::ModifiersHeld();
+    const bool held = settings::ModifiersHeld();
 
     if (held != g_modifiersHeld) {
         g_modifiersHeld = held;
@@ -167,14 +367,46 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 const POINT pt{static_cast<LONG>(GET_X_LPARAM(wparam)),
                                static_cast<LONG>(GET_Y_LPARAM(wparam))};
                 ShowTrayMenu(hwnd, pt);
+            } else if (event == WM_LBUTTONDBLCLK) {
+                // Matches the item the menu marks as its default. A single
+                // click does nothing, so brushing the icon has no effect.
+                OpenCaptureFolder();
             }
             return 0;
         }
 
-        case WM_COMMAND:
-            switch (LOWORD(wparam)) {
+        case WM_COMMAND: {
+            // The radio submenus carry their index in the command id, so the
+            // handler is a range test and a subtraction.
+            const UINT id = LOWORD(wparam);
+            if (id >= IDM_GESTURE_FIRST && id <= IDM_GESTURE_LAST) {
+                settings::SetGestureIndex(static_cast<int>(id - IDM_GESTURE_FIRST));
+                return 0;
+            }
+            if (id >= IDM_GRID_FIRST && id <= IDM_GRID_LAST) {
+                size_t total = 0;
+                const int* choices = settings::GridChoices(&total);
+                const size_t index = id - IDM_GRID_FIRST;
+                if (index < total) {
+                    settings::SetGridSizePx(choices[index]);
+                }
+                return 0;
+            }
+            switch (id) {
                 case IDM_EXIT:
                     DestroyWindow(hwnd);
+                    return 0;
+                case IDM_OPEN_FOLDER:
+                    OpenCaptureFolder();
+                    return 0;
+                case IDM_FOLDER_CHANGE:
+                    ChangeCaptureFolder(hwnd);
+                    return 0;
+                case IDM_FOLDER_DEFAULT:
+                    settings::SetCaptureRoot(nullptr);
+                    return 0;
+                case IDM_RUN_AT_STARTUP:
+                    ToggleRunAtStartup(hwnd);
                     return 0;
 #if defined(_DEBUG)
                 case IDM_DUMP_GEOMETRY:
@@ -185,6 +417,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                     break;
             }
             break;
+        }
 
         // Instrumentation: re-dump the coordinates whenever the monitor
         // configuration changes.
@@ -255,6 +488,9 @@ int Run(HINSTANCE instance) {
 
     // WIC (PNG encoding) and the shell APIs need COM.
     const auto com = wil::CoInitializeEx_failfast(COINIT_APARTMENTTHREADED);
+
+    // Before the hook goes in: the gesture it tests for comes from here.
+    settings::Load();
 
     // The manifest already declares Per-Monitor V2, but record what actually
     // took effect. Without this, a manifest that failed to apply would show up

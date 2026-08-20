@@ -8,9 +8,9 @@
 #include <cstdio>
 #include <cwchar>
 
-#include "app_name.h"
 #include "capture.h"
 #include "log.h"
+#include "settings.h"
 
 namespace sc {
 namespace {
@@ -85,19 +85,17 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
 // whole monitor, or a window whose process could not be read.
 constexpr wchar_t kUnnamedApp[] = L"Screen";
 
-// Makes sure Pictures\SweepCap\<date> exists and returns its path.
+// Makes sure <capture root>\<date> exists and returns its path.
 bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
-    wil::unique_cotaskmem_string pictures;
-    const HRESULT hr = SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &pictures);
-    if (FAILED(hr)) {
-        SC_LOG(L"[저장] SHGetKnownFolderPath(Pictures) 실패 hr=0x%08lX",
-               static_cast<unsigned long>(hr));
+    const std::wstring& root = settings::CaptureRoot();
+    if (root.empty()) {
+        SC_LOG(L"[저장] 저장 폴더를 정하지 못했다.");
         return false;
     }
 
     wchar_t folder[MAX_PATH];
-    if (swprintf_s(folder, L"%s\\%s\\%04u-%02u-%02u", pictures.get(), SWEEPCAP_NAME_W,
-                   now.wYear, now.wMonth, now.wDay) < 0) {
+    if (swprintf_s(folder, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
+                   now.wDay) < 0) {
         return false;
     }
 
