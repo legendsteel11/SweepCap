@@ -47,6 +47,32 @@ RECT MakeRect(POINT a, POINT b) {
     return RECT{std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
 }
 
+// Rounds to the nearest grid line, working from an origin that can be negative.
+LONG SnapToGrid(LONG value, LONG origin, LONG pitch) {
+    const LONG delta = value - origin;
+    // Floor division, so negative offsets round the same way as positive ones.
+    LONG cells = delta / pitch;
+    const LONG remainder = delta % pitch;
+    if (remainder != 0 && ((remainder < 0) != (pitch < 0))) {
+        --cells;
+    }
+    const LONG lower = origin + cells * pitch;
+    return (value - lower) * 2 >= pitch ? lower + pitch : lower;
+}
+
+// Top-left of the monitor a point sits on. Snapping is anchored here rather
+// than to the virtual desktop origin, because monitors can start at offsets
+// that are not multiples of the grid pitch.
+POINT MonitorOriginFor(POINT pt) {
+    HMONITOR monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    if (monitor != nullptr && GetMonitorInfoW(monitor, &info)) {
+        return POINT{info.rcMonitor.left, info.rcMonitor.top};
+    }
+    return POINT{0, 0};
+}
+
 void CALLBACK PrewarmWork(PTP_CALLBACK_INSTANCE, PVOID, PTP_WORK) {
     auto frame = std::make_unique<FrozenFrame>();
     const bool ok = frame->GrabPixels();
@@ -119,7 +145,46 @@ void CaptureSession::DropPrewarm() {
 }
 
 RECT CaptureSession::CurrentSelection() const {
-    return MakeRect(hook::Anchor(), hook::Current());
+    const RECT raw = MakeRect(hook::Anchor(), hook::Current());
+    if (!snapEnabled_) {
+        return raw;
+    }
+
+    const LONG pitch = config::kGridSizePx;
+    RECT snapped{SnapToGrid(raw.left, gridOrigin_.x, pitch),
+                 SnapToGrid(raw.top, gridOrigin_.y, pitch),
+                 SnapToGrid(raw.right, gridOrigin_.x, pitch),
+                 SnapToGrid(raw.bottom, gridOrigin_.y, pitch)};
+
+    // Rounding both edges to the nearest line can collapse a short drag to
+    // nothing. Keep at least one cell, growing in the direction of the drag.
+    if (snapped.right == snapped.left) {
+        if (hook::Current().x < hook::Anchor().x) {
+            snapped.left -= pitch;
+        } else {
+            snapped.right += pitch;
+        }
+    }
+    if (snapped.bottom == snapped.top) {
+        if (hook::Current().y < hook::Anchor().y) {
+            snapped.top -= pitch;
+        } else {
+            snapped.bottom += pitch;
+        }
+    }
+    return snapped;
+}
+
+void CaptureSession::RefreshSnapState() {
+    if (!active_) {
+        return;
+    }
+    const bool held = config::SnapModifierHeld();
+    if (held == snapEnabled_) {
+        return;
+    }
+    snapEnabled_ = held;
+    overlay_.SetSelection(CurrentSelection());
 }
 
 void CaptureSession::Begin(HWND owner) {
@@ -156,6 +221,9 @@ void CaptureSession::Begin(HWND owner) {
         return;
     }
 
+    snapEnabled_ = config::SnapModifierHeld();
+    gridOrigin_ = MonitorOriginFor(anchor);
+
     active_ = true;
     SetTimer(owner_, kEscapeTimerId, kEscapeTimerMs, nullptr);
     SC_LOG(L"[세션] 오버레이까지 %.2f ms", watch.ElapsedMs());
@@ -166,6 +234,7 @@ void CaptureSession::Update() {
     if (!active_) {
         return;
     }
+    snapEnabled_ = config::SnapModifierHeld();
     overlay_.SetSelection(CurrentSelection());
 }
 

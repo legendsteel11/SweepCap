@@ -36,6 +36,11 @@ public:
     void Finish(HWND owner);
     void Cancel(const wchar_t* reason);
 
+    // Re-reads the snap modifier and repaints if it changed. Called from the
+    // drag timer so that pressing or releasing Shift takes effect even when the
+    // mouse is standing still.
+    void RefreshSnapState();
+
 private:
     RECT CurrentSelection() const;
     void Teardown();
@@ -45,6 +50,12 @@ private:
     HWND host_ = nullptr;
     HWND owner_ = nullptr;
     bool active_ = false;
+
+    // Snapping. The grid is anchored to the top-left of the monitor the drag
+    // started on, so a selection is always a whole number of cells even when
+    // monitors sit at odd offsets from the virtual desktop origin.
+    bool snapEnabled_ = false;
+    POINT gridOrigin_{};
 };
 
 // Timer used to watch for Escape during a drag. No keyboard hook is installed,

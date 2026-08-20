@@ -146,7 +146,11 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 if ((GetAsyncKeyState(VK_ESCAPE) & 0x8000) != 0) {
                     hook::CancelDrag();
                     g_session.Cancel(L"ESC");
+                    return 0;
                 }
+                // Pressing or releasing Shift mid-drag takes effect even while
+                // the mouse is standing still.
+                g_session.RefreshSnapState();
                 return 0;
             }
             if (wparam == kModifierTimerId) {

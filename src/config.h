@@ -19,6 +19,19 @@ inline bool ModifiersHeld() {
            (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
 }
 
+// Holding Shift on top of the modifier snaps the selection to a grid.
+//
+// The shell drag modifiers this would normally collide with (Ctrl = copy,
+// Shift = move, Ctrl+Shift = shortcut) never fire, because the hook swallows
+// the button-down before any of them get a chance. The only real risk is an
+// input-language switch hotkey, which is a keyboard-only shortcut.
+inline bool SnapModifierHeld() {
+    return (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+}
+
+// Grid pitch for snapped selections. Becomes a setting later.
+constexpr int kGridSizePx = 32;
+
 // Drags shorter than this are discarded as accidental triggers.
 // A later stage turns this range into window-fit capture.
 constexpr int kMinDragPixels = 20;
