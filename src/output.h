@@ -10,22 +10,25 @@ namespace sc {
 
 struct Bitmap32;
 
-// 캡처 결과를 내보내는 곳. 인코딩은 한 번만 하고 클립보드와 파일이 나눠 쓴다.
+// Delivery of a finished capture. Encoding runs once and both the clipboard
+// and the file share the result.
 
-// PNG로 인코딩한다. WIC를 쓰므로 호출 스레드가 CoInitialize된 상태여야 한다.
-// 실패하면 빈 벡터를 돌려준다.
+// Encodes to PNG. Uses WIC, so the calling thread must have CoInitialize'd.
+// Returns an empty vector on failure.
 std::vector<uint8_t> EncodePng(const Bitmap32& bitmap);
 
-// 클립보드에 CF_DIBV5와 등록 포맷 "PNG"를 함께 올린다.
+// Places both CF_DIBV5 and the registered "PNG" format on the clipboard.
 //
-// CF_DIB만 넣으면 알파가 날아가고, CF_DIBV5만으로는 받는 앱에 따라 결과가 갈린다.
-// CF_DIB와 CF_BITMAP은 셸이 CF_DIBV5에서 자동으로 합성해 준다.
+// CF_DIB alone loses alpha, and CF_DIBV5 alone gives inconsistent results
+// depending on the receiving application. The shell synthesises CF_DIB and
+// CF_BITMAP from CF_DIBV5.
 bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8_t>& png);
 
-// Pictures\SweepCap\<날짜>\ 아래에 저장한다.
-// 파일명은 CLAUDE.md의 이름 정책을 따른다: 2026-08-18_17-23-33_451.png
-// 절대 덮어쓰지 않는다. 겹치면 -2, -3을 붙인다.
-// 성공하면 outPath에 실제 경로가 들어간다.
+// Saves under Pictures\SweepCap\<date>\ using the naming policy from CLAUDE.md:
+// 2026-08-18_17-23-33_451.png
+//
+// Never overwrites. Colliding names get -2, -3 and so on.
+// On success outPath receives the actual path written.
 bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath);
 
 }  // namespace sc

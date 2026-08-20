@@ -14,17 +14,17 @@
 namespace sc {
 namespace {
 
-// 미리 떠 둔 프레임이 이보다 묵었으면 버리고 다시 뜬다.
-// 훅이 1.5초마다 갱신을 요청하므로 정상 흐름에서는 이 값에 안 닿는다.
+// A pre-grabbed frame older than this is discarded and taken again. The
+// modifier watch refreshes every 1.5 s, so a normal flow never reaches it.
 constexpr ULONGLONG kPrewarmMaxAgeMs = 3000;
 
-// 워커 스레드와 UI 스레드가 프레임을 주고받는 자리.
+// Handoff slot between the worker thread and the UI thread.
 std::mutex g_prewarmMutex;
 std::unique_ptr<FrozenFrame> g_prewarmed;
 volatile LONG g_prewarmBusy = 0;
 PTP_WORK g_prewarmWork = nullptr;
 
-// 계측용 경과 시간.
+// Elapsed-time helper for instrumentation.
 class Stopwatch {
 public:
     Stopwatch() {
@@ -57,7 +57,7 @@ void CALLBACK PrewarmWork(PTP_CALLBACK_INSTANCE, PVOID, PTP_WORK) {
     InterlockedExchange(&g_prewarmBusy, 0);
 }
 
-// 쓸 만한(충분히 최근인) 프레임을 가져온다. 가져가면 자리는 비워진다.
+// Takes the pre-grabbed frame if it is still fresh, leaving the slot empty.
 std::unique_ptr<FrozenFrame> TakeFreshPrewarm(ULONGLONG* outAgeMs) {
     std::lock_guard lock(g_prewarmMutex);
     if (!g_prewarmed) {
@@ -87,8 +87,8 @@ void CaptureSession::Init(HWND host) {
 
 void CaptureSession::Shutdown() {
     if (g_prewarmWork != nullptr) {
-        // 워커가 끝날 때까지 기다린 뒤에 정리한다. 안 기다리면 종료 중에
-        // 이미 없어진 자리를 건드린다.
+        // Wait for the worker before tearing anything down, otherwise shutdown
+        // can touch a slot that is already gone.
         WaitForThreadpoolWorkCallbacks(g_prewarmWork, TRUE);
         CloseThreadpoolWork(g_prewarmWork);
         g_prewarmWork = nullptr;
@@ -101,10 +101,10 @@ void CaptureSession::Prewarm() {
     if (active_ || g_prewarmWork == nullptr) {
         return;
     }
-    // 창을 미리 만들어 둔다.
+    // Create the overlay window ahead of the click as well.
     overlay_.Prepare();
 
-    // 이미 뜨는 중이면 겹쳐 던지지 않는다.
+    // Do not stack requests while one is already running.
     if (InterlockedCompareExchange(&g_prewarmBusy, 1, 0) != 0) {
         return;
     }
@@ -112,7 +112,8 @@ void CaptureSession::Prewarm() {
 }
 
 void CaptureSession::DropPrewarm() {
-    // 수식키를 놓았다. 32MB를 계속 들고 있을 이유가 없다.
+    // The modifier was released; there is no reason to keep tens of megabytes
+    // of screen data resident.
     std::lock_guard lock(g_prewarmMutex);
     g_prewarmed.reset();
 }
@@ -180,12 +181,13 @@ void CaptureSession::Finish(HWND owner) {
     const double dy = static_cast<double>(current.y - anchor.y);
     const double distance = std::sqrt(dx * dx + dy * dy);
 
-    // 선택 UI가 결과에 안 찍히게 먼저 내린다. 잘라내기는 어차피 프리즈
-    // 프레임에서 하지만, 화면에서 빨리 사라지는 편이 빠르게 느껴진다.
+    // Take the overlay down first. Cropping reads the frozen frame either way,
+    // but clearing the screen sooner is what makes it feel immediate.
     overlay_.Hide();
 
     if (distance < config::kMinDragPixels) {
-        // 3단계에서 이 구간이 "창 fit 캡처"가 된다. 지금은 오발동으로 본다.
+        // A later stage turns this range into window-fit capture. For now it
+        // counts as an accidental trigger.
         SC_LOG(L"[세션] 드래그가 %.0fpx뿐이다 (최소 %d). 취소한다.", distance,
                config::kMinDragPixels);
         Teardown();

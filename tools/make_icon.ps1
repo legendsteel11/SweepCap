@@ -1,5 +1,5 @@
-# SweepCap 트레이 아이콘 생성기.
-# 32bpp BGRA + AND 마스크로 여러 크기를 담은 .ico를 직접 조립한다.
+# Generates the SweepCap tray icon.
+# Assembles a multi-size .ico directly from 32bpp BGRA data plus AND masks.
 Add-Type -AssemblyName System.Drawing
 
 $OutPath = $args[0]
@@ -23,8 +23,8 @@ function Render([int]$s) {
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $g.Clear([System.Drawing.Color]::Transparent)
 
-    # 바탕: 둥근 사각형. 밝은 작업 표시줄과 어두운 작업 표시줄 양쪽에서 보이도록
-    # 흰 마크만 두지 않고 색이 찬 판을 깐다.
+    # Plate: a rounded square. A filled plate rather than bare white marks, so
+    # the icon reads on both light and dark taskbars.
     $inset = [single]($s * 0.045)
     $side  = [single]($s - 2 * $inset)
     $radius = [single]($s * 0.235)
@@ -38,11 +38,12 @@ function Render([int]$s) {
     $brush.Dispose()
     $path.Dispose()
 
-    # 마크: 캡처 영역을 뜻하는 모서리 브래킷.
-    # 대각선을 함께 그렸더니 브래킷과 붙어 크기 조정 아이콘처럼 읽혀서 뺐다.
+    # Mark: corner brackets standing for a capture region. A diagonal stroke was
+    # tried alongside them and dropped: it merged with the brackets and read as
+    # a resize icon.
     #
-    # 작은 크기는 픽셀에 스냅한다. 트레이가 실제로 쓰는 크기가 16~24px이고,
-    # 소수점 좌표로 그리면 안티에일리어싱 때문에 흐려진다.
+    # Small sizes snap to the pixel grid. The tray actually uses 16-24px, where
+    # fractional coordinates turn into antialiased mush.
     $white = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
     $swi = [int][Math]::Max(1, [Math]::Round($s * 0.075))
     $pen = New-Object System.Drawing.Pen($white, [single]$swi)
@@ -52,14 +53,15 @@ function Render([int]$s) {
     if ($s -le 24) { $mi = [int][Math]::Round($s * 0.20) }
     else           { $mi = [int][Math]::Round($s * 0.235) }
 
-    # 홀수 굵기는 픽셀 중심(x.5)에, 짝수 굵기는 픽셀 경계에 놓아야 번지지 않는다.
+    # Odd stroke widths land on pixel centres (x.5), even widths on pixel
+    # boundaries; anything else bleeds.
     $off = 0.0
     if ($swi % 2 -eq 1) { $off = 0.5 }
     $lo = [single]($mi + $off)
     $hi = [single]($s - $mi - $off)
 
     if ($s -lt 24) {
-        # 브래킷이 뭉개지는 크기다. 사각형 외곽선만 그리고 안티에일리어싱도 끈다.
+        # Brackets fall apart at this size: draw a plain outline with AA off.
         $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::None
         $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Flat
         $pen.EndCap   = [System.Drawing.Drawing2D.LineCap]::Flat
@@ -98,7 +100,7 @@ function Get-Bgra([System.Drawing.Bitmap]$bmp) {
     [System.Runtime.InteropServices.Marshal]::Copy($data.Scan0, $buf, 0, $buf.Length)
     $bmp.UnlockBits($data)
 
-    # ICO의 XOR 데이터는 상하 반전(bottom-up)이다.
+    # XOR data in an ICO is stored bottom-up.
     $out = New-Object byte[] ($w * $h * 4)
     for ($y = 0; $y -lt $h; $y++) {
         [Array]::Copy($buf, ($h - 1 - $y) * $stride, $out, $y * $w * 4, $w * 4)
@@ -130,7 +132,7 @@ foreach ($s in $sizes) {
 
     $ms = New-Object System.IO.MemoryStream
     $bw = New-Object System.IO.BinaryWriter($ms)
-    # BITMAPINFOHEADER: 높이는 XOR + AND 합이라 두 배로 적는다.
+    # BITMAPINFOHEADER: height covers XOR + AND, so it is written doubled.
     $bw.Write([uint32]40); $bw.Write([int32]$s); $bw.Write([int32]($s * 2))
     $bw.Write([uint16]1);  $bw.Write([uint16]32); $bw.Write([uint32]0)
     $bw.Write([uint32]($bgra.Length + $mask.Length))

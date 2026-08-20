@@ -8,7 +8,7 @@
 namespace sc {
 namespace {
 
-// 계측용 경과 시간.
+// Elapsed-time helper for instrumentation.
 class Stopwatch {
 public:
     Stopwatch() {
@@ -61,8 +61,8 @@ bool FrozenFrame::GrabPixels() {
         return false;
     }
 
-    // top-down DIB. biHeight를 음수로 주면 첫 행이 화면 맨 윗줄이 되어
-    // 잘라내기와 인코딩에서 상하 반전을 안 해도 된다.
+    // Top-down DIB. A negative biHeight puts the topmost screen row first, so
+    // cropping and encoding never have to flip anything.
     BITMAPINFO info{};
     info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     info.bmiHeader.biWidth = width;
@@ -79,8 +79,8 @@ bool FrozenFrame::GrabPixels() {
         return false;
     }
 
-    // 이 DC는 여기서만 쓰고 버린다. 프레임을 다른 스레드로 넘기기 때문에
-    // 스레드 친화성이 있는 DC를 들고 다니지 않는다.
+    // This DC is used here and discarded. The frame is handed to another
+    // thread, so it must not carry a DC, which has thread affinity.
     {
         wil::unique_hdc blitDc{CreateCompatibleDC(screenDc.get())};
         if (!blitDc) {
@@ -89,8 +89,8 @@ bool FrozenFrame::GrabPixels() {
         }
         auto scope = wil::SelectObject(blitDc.get(), dib.get());
 
-        // CAPTUREBLT를 넣어야 레이어드 창(툴팁, 반투명 오버레이)이 함께 찍힌다.
-        // 대신 8~10ms를 더 쓴다(2026-08-20 실측).
+        // CAPTUREBLT is what makes layered windows - tooltips, translucent
+        // overlays - appear in the capture. It costs 8-10 ms extra.
         if (!BitBlt(blitDc.get(), 0, 0, width, height, screenDc.get(), bounds.left, bounds.top,
                     SRCCOPY | CAPTUREBLT)) {
             SC_LOG(L"[캡처] BitBlt 실패 err=%lu", GetLastError());
@@ -101,10 +101,10 @@ bool FrozenFrame::GrabPixels() {
 
     const double blitMs = watch.ElapsedMs();
 
-    // 어둡게 만든 사본을 만든다. 오버레이가 선택 영역 밖에 이걸 그대로 깐다.
+    // Build the darkened copy the overlay lays down outside the selection.
     //
-    // 정확히 절반으로 낮춘다. 시프트 하나와 마스크 하나면 끝나서 곱셈 없이
-    // 빠르다. 64비트씩 묶어 반복 횟수를 절반으로 줄인다.
+    // Exactly half brightness, which takes one shift and one mask per pixel
+    // with no multiply. Working 64 bits at a time halves the iteration count.
     void* dimBits = nullptr;
     wil::unique_hbitmap dimDib{
         CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &dimBits, nullptr, 0)};
@@ -170,7 +170,7 @@ Bitmap32 FrozenFrame::Crop(const RECT& rect) const {
         return out;
     }
 
-    // 프레임 안으로 자른다. 드래그가 화면 밖으로 나가도 안전하게 한다.
+    // Clip to the frame so a drag that leaves the screen stays safe.
     RECT clipped{};
     if (!IntersectRect(&clipped, &rect, &bounds_)) {
         return out;
@@ -194,7 +194,7 @@ Bitmap32 FrozenFrame::Crop(const RECT& rect) const {
         const uint32_t* src = pixels_ + static_cast<size_t>(offsetY + y) * frameWidth + offsetX;
         uint32_t* dst = out.Row(y);
         for (int x = 0; x < width; ++x) {
-            // BitBlt로 뜬 화면은 알파가 쓰레기값이다. 불투명으로 채운다.
+            // A screen BitBlt leaves alpha undefined. Force it opaque.
             dst[x] = src[x] | 0xFF000000u;
         }
     }

@@ -9,8 +9,8 @@
 namespace sc {
 namespace {
 
-// 트레이용 작은 아이콘. LoadIconMetric은 DPI를 감안해 알맞은 크기를 고른다.
-// (comctl32 v6가 필요하고 매니페스트에 선언해 뒀다.)
+// Small icon for the tray. LoadIconMetric picks a size appropriate for the
+// current DPI. It needs comctl32 v6, which the manifest declares.
 wil::unique_hicon LoadTrayIcon() {
     HICON raw = nullptr;
     const HRESULT hr = LoadIconMetric(GetModuleHandleW(nullptr),
@@ -61,8 +61,8 @@ bool Tray::Register() {
         return false;
     }
 
-    // 버전 4를 쓰면 마우스 좌표가 wParam에 화면 좌표로 들어오고
-    // 우클릭이 WM_CONTEXTMENU로 정규화된다.
+    // Version 4 delivers mouse position in wParam as screen coordinates and
+    // normalises right-click to WM_CONTEXTMENU.
     nid.uVersion = NOTIFYICON_VERSION_4;
     if (!Shell_NotifyIconW(NIM_SETVERSION, &nid)) {
         SC_LOG(L"Shell_NotifyIcon(NIM_SETVERSION) 실패 err=%lu", GetLastError());
@@ -73,7 +73,8 @@ bool Tray::Register() {
 }
 
 bool Tray::Restore() {
-    // 탐색기가 재시작하면 이전 등록은 이미 사라졌다. 지우려 하지 않고 다시 넣는다.
+    // After an Explorer restart the previous registration is already gone, so
+    // add a fresh one instead of trying to delete first.
     added_ = false;
     const bool ok = Register();
     SC_LOG(L"TaskbarCreated: 트레이 아이콘 재등록 %s", ok ? L"성공" : L"실패");

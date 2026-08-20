@@ -18,7 +18,7 @@ wil::unique_hfile g_file;
 wchar_t g_path[MAX_PATH] = L"";
 bool g_initialized = false;
 
-// %LOCALAPPDATA%\SweepCap\sweepcap-debug.log 경로를 만들고 폴더를 확보한다.
+// Builds %LOCALAPPDATA%\SweepCap\sweepcap-debug.log and makes sure the folder exists.
 bool ResolvePath() {
     wil::unique_cotaskmem_string base;
     if (FAILED(SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &base))) {
@@ -28,7 +28,7 @@ bool ResolvePath() {
     if (swprintf_s(dir, L"%s\\%s", base.get(), SWEEPCAP_NAME_W) < 0) {
         return false;
     }
-    CreateDirectoryW(dir, nullptr);  // 이미 있으면 실패해도 상관없다.
+    CreateDirectoryW(dir, nullptr);  // failing because it already exists is fine
     return swprintf_s(g_path, L"%s\\sweepcap-debug.log", dir) >= 0;
 }
 
@@ -44,13 +44,13 @@ void Init() {
     if (!ResolvePath()) {
         return;
     }
-    // 실행할 때마다 새로 쓴다. 계측기가 디스크를 야금야금 먹지 않게 한다.
+    // Start fresh on every run so the instrumentation does not slowly eat disk.
     g_file.reset(CreateFileW(g_path, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
                              CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
     if (!g_file) {
         return;
     }
-    // UTF-8 BOM. 메모장과 에디터가 한글을 제대로 읽게 한다.
+    // UTF-8 BOM, so Notepad and editors read the Korean text correctly.
     static constexpr unsigned char kBom[] = {0xEF, 0xBB, 0xBF};
     DWORD written = 0;
     WriteFile(g_file.get(), kBom, sizeof(kBom), &written, nullptr);
@@ -89,7 +89,7 @@ void Write(const wchar_t* fmt, ...) {
     if (!g_file) {
         return;
     }
-    // 파일에는 UTF-8로 남긴다.
+    // The file holds UTF-8.
     const int bytes = WideCharToMultiByte(CP_UTF8, 0, line, -1, nullptr, 0, nullptr, nullptr);
     if (bytes <= 1) {
         return;

@@ -2,27 +2,28 @@
 
 #include <windows.h>
 
-// CLAUDE.md "조작 기본값".
-// 5단계에서 설정 창으로 뺀다. 그때까지 상수를 여기 한 곳에 모아 둔다.
-// 값을 코드 여기저기에 흩뿌리지 않는 것이 목적이다.
+// Default gestures and thresholds.
+//
+// These move into the settings window in a later stage. Until then they stay
+// collected here rather than scattered through the code.
 
 namespace sc::config {
 
-// 수식키는 Ctrl+Alt다. 셸 드래그 수식키 중 유일하게 비어 있고
-// 입력 언어 전환에도 안 걸린다.
+// The modifier is Ctrl+Alt: the one shell drag modifier that is unclaimed and
+// does not collide with input language switching.
 //
-// 키보드 훅을 쓰지 않는다. 백신 오탐 프로파일을 낮추기 위해서다.
-// 수식키 상태는 마우스 훅 안에서 GetAsyncKeyState로 읽는다.
+// No keyboard hook is installed anywhere in this application; that keeps the
+// antivirus heuristic profile low. Modifier state is read with GetAsyncKeyState.
 inline bool ModifiersHeld() {
     return (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0 &&
            (GetAsyncKeyState(VK_MENU) & 0x8000) != 0;
 }
 
-// 이보다 짧은 드래그는 취소한다. 오발동 방지.
-// 3단계에서 이 구간이 "창 fit 캡처"가 된다.
+// Drags shorter than this are discarded as accidental triggers.
+// A later stage turns this range into window-fit capture.
 constexpr int kMinDragPixels = 20;
 
-// 캡처 후 처리. 기본은 둘 다.
+// What happens after a capture. Both by default.
 constexpr bool kCopyToClipboard = true;
 constexpr bool kSaveToFile = true;
 

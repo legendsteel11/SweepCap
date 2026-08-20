@@ -16,7 +16,7 @@ BOOL CALLBACK EnumProc(HMONITOR handle, HDC, LPRECT, LPARAM param) {
     MONITORINFOEXW info{};
     info.cbSize = sizeof(info);
     if (!GetMonitorInfoW(handle, &info)) {
-        return TRUE;  // 한 대를 못 읽어도 나머지는 계속 센다.
+        return TRUE;  // one unreadable monitor should not stop the enumeration
     }
 
     MonitorGeometry geo;
@@ -48,7 +48,7 @@ bool DesktopGeometry::HasMixedDpi() const {
 DesktopGeometry QueryDesktop() {
     DesktopGeometry desktop;
 
-    // 가상 데스크탑은 SM_* 로 얻는다. 원점이 음수일 수 있다.
+    // The virtual desktop comes from the SM_* metrics. Its origin can be negative.
     const int x = GetSystemMetrics(SM_XVIRTUALSCREEN);
     const int y = GetSystemMetrics(SM_YVIRTUALSCREEN);
     desktop.bounds.left = x;
@@ -59,7 +59,7 @@ DesktopGeometry QueryDesktop() {
     EnumDisplayMonitors(nullptr, nullptr, EnumProc,
                         reinterpret_cast<LPARAM>(&desktop.monitors));
 
-    // 주 모니터를 앞으로, 나머지는 좌상단 순으로. 로그를 읽기 쉽게 하려는 것뿐이다.
+    // Primary first, then top-left order. This only exists to keep the log readable.
     std::sort(desktop.monitors.begin(), desktop.monitors.end(),
               [](const MonitorGeometry& a, const MonitorGeometry& b) {
                   if (a.primary != b.primary) {
@@ -85,7 +85,7 @@ RECT WindowFrameBounds(HWND hwnd, bool* usedDwm) {
         return frame;
     }
 
-    // DWM이 추적하지 않는 창(데스크탑 창 등)은 여기로 온다.
+    // Windows that DWM does not track, such as the desktop window, land here.
     if (usedDwm) {
         *usedDwm = false;
     }
@@ -106,13 +106,14 @@ void LogDesktopGeometry(const wchar_t* reason) {
                m.primary ? L"* " : L"  ", m.device.c_str(), m.dpi, m.ScalePercent(),
                m.monitor.left, m.monitor.top, m.monitor.right, m.monitor.bottom,
                m.MonitorWidth(), m.MonitorHeight());
-        SC_LOG(L"                               " L"rcWork   =(%ld,%ld,%ld,%ld) %ldx%ld",
+        SC_LOG(L"                               rcWork   =(%ld,%ld,%ld,%ld) %ldx%ld",
                m.work.left, m.work.top, m.work.right, m.work.bottom,
                m.WorkWidth(), m.WorkHeight());
     }
 
-    // CLAUDE.md "테스트 환경"이 요구하는 두 조건이 지금 구성에서 성립하는지 남긴다.
-    // 둘 다 아니면 혼합 DPI와 음수 좌표 경로를 한 번도 안 밟고 지나간다.
+    // Record whether the two conditions the test plan calls for hold on this
+    // machine. If neither does, the mixed-DPI and negative-origin paths are
+    // never exercised.
     SC_LOG(L"검증 조건: 혼합 DPI=%s, 음수 원점=%s",
            desktop.HasMixedDpi() ? L"예" : L"아니오 (미검증 경로)",
            desktop.HasNegativeOrigin() ? L"예" : L"아니오 (미검증 경로)");

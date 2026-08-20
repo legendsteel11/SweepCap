@@ -12,11 +12,12 @@ namespace {
 
 constexpr wchar_t kOverlayClass[] = L"SweepCap.Overlay";
 
-// 선택 테두리. 바깥 검정 1px, 안쪽 흰색 1px이라 어떤 배경에서도 보인다.
+// Selection border: 1px black outside, 1px white inside, so it stays visible
+// against any background.
 constexpr COLORREF kBorderInner = RGB(255, 255, 255);
 constexpr COLORREF kBorderOuter = RGB(0, 0, 0);
 
-// 크기 표시 상자.
+// Size readout.
 constexpr COLORREF kLabelBack = RGB(24, 24, 28);
 constexpr COLORREF kLabelText = RGB(255, 255, 255);
 constexpr int kLabelPaddingX = 8;
@@ -34,9 +35,8 @@ void FillRectColor(HDC dc, const RECT& r, COLORREF color) {
     SetBkColor(dc, old);
 }
 
-
-// a에서 b를 뺀 영역을 최대 네 조각의 사각형으로 나눈다. 조각끼리 겹치지 않는다.
-// 이것이 "픽셀마다 한 번만 쓴다"를 지키는 도구다.
+// Splits a minus b into at most four non-overlapping rectangles.
+// This is the tool that keeps painting to one write per pixel.
 int SubtractRect(const RECT& a, const RECT& b, RECT* out) {
     if (a.right <= a.left || a.bottom <= a.top) {
         return 0;
@@ -93,7 +93,7 @@ LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         }
 
         case WM_ERASEBKGND:
-            return 1;  // 전부 직접 그린다. 지우면 깜빡인다.
+            return 1;  // everything is painted explicitly; erasing would flicker
 
         case WM_PAINT: {
             PAINTSTRUCT ps{};
@@ -105,8 +105,8 @@ LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
             return 0;
         }
 
-        // 활성화되지 않는 창이다. 밑에 있던 창이 활성 상태로 남아야
-        // 캡처가 끝난 뒤 사용자가 하던 일을 이어갈 수 있다.
+        // This window never activates, so whatever was in front stays active
+        // and the user can carry on where they left off after the capture.
         case WM_MOUSEACTIVATE:
             return MA_NOACTIVATE;
 
@@ -128,8 +128,9 @@ bool Overlay::EnsureWindow() {
         wc.hInstance = GetModuleHandleW(nullptr);
         wc.lpszClassName = kOverlayClass;
         wc.hCursor = LoadCursorW(nullptr, IDC_CROSS);
-        // 배경은 직접 그리지만, 창이 처음 보이고 첫 WM_PAINT가 오기 전까지
-        // 시스템이 한 번 칠하는 구간이 있다. 이때 흰색이 스치지 않게 검정으로 둔다.
+        // The background is painted explicitly, but there is a window between
+        // the window becoming visible and the first WM_PAINT during which the
+        // system fills it. Black keeps white from flashing through there.
         wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         if (RegisterClassExW(&wc) == 0) {
             SC_LOG(L"[오버레이] RegisterClassEx 실패 err=%lu", GetLastError());
@@ -158,8 +159,9 @@ bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
     frame_ = &frame;
     selection_ = RECT{anchor.x, anchor.y, anchor.x, anchor.y};
 
-    // 커서가 있는 모니터의 DPI로 글꼴을 만든다. 창이 여러 모니터에 걸쳐 있으면
-    // 정답이 하나가 아니므로 드래그 시작 지점 기준으로 정한다.
+    // Build the font for the DPI of the monitor under the cursor. A window
+    // spanning monitors of different DPI has no single right answer, so the
+    // drag origin decides.
     const UINT dpi = DpiForPoint(anchor);
     LOGFONTW lf{};
     lf.lfHeight = -MulDiv(12, static_cast<int>(dpi), 72);
@@ -176,7 +178,7 @@ bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
     visible_ = true;
 
     InvalidateRect(hwnd_, nullptr, FALSE);
-    UpdateWindow(hwnd_);  // 첫 화면은 즉시 그린다. 늦으면 깜빡임으로 보인다.
+    UpdateWindow(hwnd_);  // paint the first frame now; a late one reads as a flash
     return true;
 }
 
@@ -202,7 +204,8 @@ void Overlay::InvalidateForSelection(const RECT& before, const RECT& after) cons
     if (!hwnd_) {
         return;
     }
-    // 테두리와 크기 표시가 사각형 밖으로 나가므로 넉넉히 무효화한다.
+    // The border and the size readout extend past the rectangle, so invalidate
+    // with room to spare.
     constexpr int kMargin = 80;
     const RECT changed[2] = {before, after};
     for (const RECT& r : changed) {
@@ -240,14 +243,14 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
         return;
     }
 
-    // 어두운 사본이 없으면(만들기 실패) 원본으로 대신한다.
-    // 어둡게는 안 되지만 선택은 그대로 할 수 있다.
+    // If building the darkened copy failed, fall back to the original. Nothing
+    // gets dimmed, but the selection still works.
     HDC dimSource = frame_->DimDc() != nullptr ? frame_->DimDc() : frame_->Dc();
 
     const RECT sel = ToClient(selection_);
     const bool hasSelection = sel.right > sel.left && sel.bottom > sel.top;
 
-    // 테두리는 선택 영역 바깥에 붙는다. 바깥 1px 검정, 안쪽 1px 흰색.
+    // The border sits outside the selection: 1px black then 1px white.
     RECT ringOuter = sel;
     RECT ringMid = sel;
     if (hasSelection) {
@@ -255,7 +258,8 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
         InflateRect(&ringMid, 1, 1);
     }
 
-    // 크기 표시 상자를 먼저 계산한다. 밑칠에서 이 자리를 빼야 하기 때문이다.
+    // The size readout is measured first because its area has to be excluded
+    // from everything painted underneath.
     wchar_t text[64];
     int textLength = 0;
     RECT label{};
@@ -272,7 +276,7 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
                 label = RECT{sel.left, sel.bottom + kLabelGap, sel.left + boxWidth,
                              sel.bottom + kLabelGap + boxHeight};
 
-                // 화면 밖으로 나가면 안쪽으로 접는다.
+                // Fold it back inside when it would leave the screen.
                 const RECT& bounds = frame_->Bounds();
                 const LONG clientBottom = bounds.bottom - bounds.top;
                 const LONG clientRight = bounds.right - bounds.left;
@@ -294,12 +298,12 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
         }
     }
 
-    // 여기부터가 "픽셀마다 한 번만 쓴다"를 지키는 부분이다.
+    // This is where the one-write-per-pixel rule is enforced.
     //
-    // 밑칠(어두운 사본 / 원본 / 테두리)은 서로 겹치지 않는 조각으로 나눠 칠하고,
-    // 크기 표시 자리는 클립에서 아예 빼 둔다. 그래서 어떤 픽셀도 두 번 칠해지지
-    // 않는다. 두 번 칠하면 그 사이에 모니터가 갱신될 때 중간 상태가 보이고,
-    // 그것이 테두리가 흔들려 보이던 원인이었다.
+    // The underlying passes - darkened copy, border, original - are split into
+    // non-overlapping rectangles, and the size readout is clipped out entirely.
+    // Painting a pixel twice lets a display refresh land between the two writes
+    // and show the intermediate state, which is what made the border shimmer.
     const int savedDc = SaveDC(dc);
     if (hasLabel) {
         ExcludeClipRect(dc, label.left, label.top, label.right, label.bottom);
@@ -308,7 +312,7 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
     RECT pieces[4]{};
     int count = 0;
 
-    // 1. 테두리 바깥: 어두운 사본
+    // 1. Outside the border: the darkened copy.
     count = hasSelection ? SubtractRect(dirty, ringOuter, pieces) : 0;
     if (!hasSelection) {
         pieces[count++] = dirty;
@@ -320,19 +324,19 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
     }
 
     if (hasSelection) {
-        // 2. 테두리 검정 1px
+        // 2. Border, outer 1px.
         count = SubtractRect(ringOuter, ringMid, pieces);
         for (int i = 0; i < count; ++i) {
             FillRectColor(dc, pieces[i], kBorderOuter);
         }
 
-        // 3. 테두리 흰색 1px
+        // 3. Border, inner 1px.
         count = SubtractRect(ringMid, sel, pieces);
         for (int i = 0; i < count; ++i) {
             FillRectColor(dc, pieces[i], kBorderInner);
         }
 
-        // 4. 선택 영역 안: 원본
+        // 4. Inside the selection: the original.
         RECT inside{};
         if (IntersectRect(&inside, &dirty, &sel)) {
             BitBlt(dc, inside.left, inside.top, static_cast<int>(inside.right - inside.left),
@@ -343,8 +347,8 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
 
     RestoreDC(dc, savedDc);
 
-    // 5. 크기 표시. 배경과 글자를 한 번에 쓴다.
-    //    배경을 칠한 뒤 글자를 얹으면 같은 문제가 생긴다.
+    // 5. Size readout. ETO_OPAQUE writes background and glyphs in one call;
+    //    filling the box and then drawing text would be two writes again.
     if (hasLabel) {
         const COLORREF oldBk = SetBkColor(dc, kLabelBack);
         const COLORREF oldText = SetTextColor(dc, kLabelText);
@@ -356,4 +360,5 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
         SetBkColor(dc, oldBk);
     }
 }
+
 }  // namespace sc

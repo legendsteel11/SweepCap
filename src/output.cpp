@@ -15,13 +15,13 @@
 namespace sc {
 namespace {
 
-// 클립보드에 올릴 PNG 포맷은 등록 포맷이다. 이름은 관례로 "PNG"다.
+// PNG on the clipboard is a registered format; "PNG" is the conventional name.
 UINT PngClipboardFormat() {
     static const UINT format = RegisterClipboardFormatW(L"PNG");
     return format;
 }
 
-// HGLOBAL 하나를 만들어 바이트를 그대로 복사한다.
+// Allocates one HGLOBAL and copies the bytes into it.
 wil::unique_hglobal MakeGlobal(const void* data, size_t size) {
     wil::unique_hglobal block{GlobalAlloc(GMEM_MOVEABLE, size)};
     if (!block) {
@@ -36,10 +36,10 @@ wil::unique_hglobal MakeGlobal(const void* data, size_t size) {
     return block;
 }
 
-// CF_DIBV5 블록을 만든다.
+// Builds a CF_DIBV5 block.
 //
-// 높이를 양수로 두어 bottom-up으로 넣는다. top-down(음수 높이)도 규격상
-// 맞지만 받는 앱 중에 뒤집어 붙이는 것들이 있다.
+// Height stays positive, i.e. bottom-up. Top-down (negative height) is legal
+// too, but some receiving applications paste it upside down.
 wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
     const size_t pixelBytes = bitmap.ByteSize();
     const size_t total = sizeof(BITMAPV5HEADER) + pixelBytes;
@@ -57,7 +57,7 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
     ZeroMemory(header, sizeof(*header));
     header->bV5Size = sizeof(BITMAPV5HEADER);
     header->bV5Width = bitmap.width;
-    header->bV5Height = bitmap.height;  // 양수 = bottom-up
+    header->bV5Height = bitmap.height;  // positive: bottom-up
     header->bV5Planes = 1;
     header->bV5BitCount = 32;
     header->bV5Compression = BI_BITFIELDS;
@@ -72,7 +72,7 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
     auto* dst = reinterpret_cast<uint32_t*>(base + sizeof(BITMAPV5HEADER));
     const size_t rowPixels = static_cast<size_t>(bitmap.width);
     for (int y = 0; y < bitmap.height; ++y) {
-        // 원본은 top-down이므로 마지막 행부터 넣는다.
+        // The source is top-down, so write its rows in reverse.
         memcpy(dst + static_cast<size_t>(y) * rowPixels, bitmap.Row(bitmap.height - 1 - y),
                rowPixels * sizeof(uint32_t));
     }
@@ -81,7 +81,7 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
     return block;
 }
 
-// Pictures\SweepCap\<날짜> 폴더를 확보하고 경로를 돌려준다.
+// Makes sure Pictures\SweepCap\<date> exists and returns its path.
 bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     wil::unique_cotaskmem_string pictures;
     const HRESULT hr = SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &pictures);
@@ -155,7 +155,7 @@ std::vector<uint8_t> EncodePng(const Bitmap32& bitmap) {
     }
 
     const UINT stride = static_cast<UINT>(bitmap.width) * 4;
-    // WritePixels는 const가 아닌 포인터를 받지만 내용을 바꾸지 않는다.
+    // WritePixels takes a non-const pointer but does not modify the buffer.
     auto* pixels = const_cast<BYTE*>(reinterpret_cast<const BYTE*>(bitmap.pixels.data()));
     if (FAILED(frame->WritePixels(static_cast<UINT>(bitmap.height), stride,
                                   static_cast<UINT>(bitmap.ByteSize()), pixels)) ||
@@ -183,7 +183,7 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
         return false;
     }
 
-    // 잠글 블록을 먼저 다 만들어 둔다. 클립보드를 연 상태를 짧게 유지한다.
+    // Build every block before opening the clipboard, to hold it open briefly.
     wil::unique_hglobal dib = MakeDibV5(bitmap);
     if (!dib) {
         SC_LOG(L"[클립보드] DIBV5 블록 생성 실패");
@@ -205,7 +205,7 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
     }
 
     bool any = false;
-    // SetClipboardData가 성공하면 소유권이 클립보드로 넘어간다. release()로 놓는다.
+    // A successful SetClipboardData transfers ownership, so release the handle.
     if (SetClipboardData(CF_DIBV5, dib.get()) != nullptr) {
         dib.release();
         any = true;
@@ -238,7 +238,8 @@ bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath) {
     }
 
     // 2026-08-18_17-23-33_451.png
-    // 밀리초까지 넣으므로 사람 손으로는 겹칠 수 없다. 그래도 겹치면 -2, -3.
+    // Milliseconds make a collision practically impossible by hand; -2, -3
+    // exist only as a backstop.
     wchar_t stem[64];
     if (swprintf_s(stem, L"%04u-%02u-%02u_%02u-%02u-%02u_%03u", now.wYear, now.wMonth,
                    now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds) < 0) {
@@ -257,8 +258,8 @@ bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath) {
             return false;
         }
 
-        // CREATE_NEW다. 이미 있으면 실패하고 다음 번호로 넘어간다.
-        // 덮어쓰는 경로가 아예 없다.
+        // CREATE_NEW: an existing file makes this fail and the loop moves to
+        // the next number. There is no code path that overwrites.
         wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW,
                                            FILE_ATTRIBUTE_NORMAL, nullptr)};
         if (!file) {
