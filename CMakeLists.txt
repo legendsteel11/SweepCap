@@ -35,9 +35,14 @@ string(REPLACE "/RTC1" "" CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 
 add_executable(sweepcap WIN32
     src/main.cpp
+    src/hook.cpp
     src/app.cpp
+    src/capture.cpp
     src/coords.cpp
     src/log.cpp
+    src/output.cpp
+    src/overlay.cpp
+    src/session.cpp
     src/tray.cpp
     res/sweepcap.rc
 )
@@ -88,6 +93,8 @@ target_link_libraries(sweepcap PRIVATE
     dwmapi      # DWMWA_EXTENDED_FRAME_BOUNDS
     ole32       # CoTaskMemFree
     comctl32    # LoadIconMetric
+    msimg32     # AlphaBlend (오버레이 어둡게)
+    windowscodecs  # WIC PNG 인코딩
 )
 
 if(SWEEPCAP_ASAN_ACTIVE)
