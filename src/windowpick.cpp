@@ -12,9 +12,19 @@
 namespace sc {
 namespace {
 
-// Anything smaller than this is a popup or an artefact, not a window someone
-// means to capture.
-constexpr LONG kMinWindowSide = 80;
+// Anything smaller than one grid cell is an artefact rather than a window
+// someone means to capture. The floor is deliberately low: tray utilities are
+// often narrow strips, and rejecting them is worse than occasionally offering
+// a small helper window.
+constexpr LONG kMinWindowSide = 32;
+
+// The desktop itself. Clicking empty space should fall through to the corner
+// rule and then to an ordinary drag, not capture the entire screen.
+bool IsDesktopClass(HWND hwnd) {
+    wchar_t cls[32] = L"";
+    GetClassNameW(hwnd, cls, ARRAYSIZE(cls));
+    return wcscmp(cls, L"Progman") == 0 || wcscmp(cls, L"WorkerW") == 0;
+}
 
 // Windows 11 rounds corners at 8 DIPs, or 4 for the small variant.
 constexpr int kCornerRadiusDip = 8;
@@ -38,40 +48,14 @@ bool IsCloaked(HWND hwnd) {
     return cloaked != FALSE;
 }
 
+bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame);
+
 BOOL CALLBACK EnumProc(HWND hwnd, LPARAM param) {
     auto* state = reinterpret_cast<EnumState*>(param);
-
-    if (!IsWindowVisible(hwnd) || IsIconic(hwnd)) {
-        return TRUE;
-    }
-
-    DWORD processId = 0;
-    GetWindowThreadProcessId(hwnd, &processId);
-    if (processId == state->ownProcess) {
-        return TRUE;  // never pick our own overlay or host window
-    }
-
-    // Owned windows are kept on purpose: dialogs are exactly the kind of thing
-    // people want to capture. Tool windows are not.
-    if ((GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) {
-        return TRUE;
-    }
-
-    // UWP leaves suspended windows visible but cloaked.
-    if (IsCloaked(hwnd)) {
-        return TRUE;
-    }
-
     RECT frame{};
-    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame)))) {
-        return TRUE;
+    if (IsPickable(hwnd, state->ownProcess, &frame)) {
+        state->found.push_back(Candidate{hwnd, frame});
     }
-    if (frame.right - frame.left < kMinWindowSide ||
-        frame.bottom - frame.top < kMinWindowSide) {
-        return TRUE;
-    }
-
-    state->found.push_back(Candidate{hwnd, frame});
     return TRUE;
 }
 
@@ -123,7 +107,11 @@ int CornerRadiusFor(HWND hwnd, const RECT& frame) {
 }
 
 // The shared filter: is this a top-level window worth offering as a capture
-// target? Kept separate so both picking rules apply exactly the same test.
+// target? Both picking rules go through it, so they cannot drift apart.
+//
+// WS_EX_TOOLWINDOW is not a rejection. That style is exactly what keeps a
+// window out of Alt+Tab, which is what tray utilities set, and filtering on it
+// made every tray-only application uncapturable.
 bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame) {
     if (hwnd == nullptr || !IsWindowVisible(hwnd) || IsIconic(hwnd)) {
         return false;
@@ -133,7 +121,7 @@ bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame) {
     if (processId == ownProcess) {
         return false;
     }
-    if ((GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) {
+    if (IsDesktopClass(hwnd)) {
         return false;
     }
     if (IsCloaked(hwnd)) {
@@ -205,6 +193,22 @@ bool PickWindowByCorner(const RECT& cell, WindowPick* out) {
         }
     }
     return false;
+}
+
+bool PickMonitorAt(POINT pt, WindowPick* out) {
+    if (out == nullptr) {
+        return false;
+    }
+    HMONITOR monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    if (monitor == nullptr || !GetMonitorInfoW(monitor, &info)) {
+        return false;
+    }
+    out->hwnd = nullptr;
+    out->frame = info.rcMonitor;  // the whole screen, taskbar included
+    out->cornerRadius = 0;
+    return true;
 }
 
 void CarveRoundedCorners(Bitmap32& bitmap, int radius) {

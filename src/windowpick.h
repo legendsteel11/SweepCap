@@ -13,9 +13,11 @@ struct Bitmap32;
 //   1. The window under the cursor. Aiming anywhere inside a window is easy,
 //      so this is what fires almost every time.
 //   2. A window with a corner in the grid cell the drag started in. This only
-//      gets a turn when the cursor is over the desktop or over something that
-//      cannot be captured, and it exists for the case rule 1 cannot serve: a
-//      target buried under other windows with only a corner still exposed.
+//      gets a turn when the cursor is over the desktop, and it exists for the
+//      case rule 1 cannot serve: a target buried under other windows with only
+//      a corner still exposed.
+//   3. The monitor under the cursor. Clicking bare desktop captures that whole
+//      screen.
 //
 // Enumerating and filtering top-level windows costs well under a millisecond,
 // so this runs once per drag with no caching.
@@ -33,6 +35,11 @@ bool PickWindowAt(POINT pt, WindowPick* out);
 // process are skipped, as are windows whose matching corner is covered by
 // something else, so a target hidden behind another window is never picked.
 bool PickWindowByCorner(const RECT& cell, WindowPick* out);
+
+// The whole monitor under pt. This is the last resort, used when the cursor is
+// over bare desktop and no exposed corner is in reach: clicking empty space
+// captures that screen.
+bool PickMonitorAt(POINT pt, WindowPick* out);
 
 // Clears the alpha channel in the four corners so a Windows 11 window does not
 // carry the background showing through its rounded corners. No-op when radius

@@ -79,6 +79,7 @@ private:
     WindowPick pick_{};
     bool hasPick_ = false;
     bool pickReleased_ = false;
+    const wchar_t* pickRule_ = nullptr;  // which rule matched, for the log
     bool windowShownLast_ = false;
     ULONGLONG dragStartedAt_ = 0;
 };

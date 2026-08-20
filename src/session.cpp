@@ -264,12 +264,13 @@ void CaptureSession::Begin(HWND owner) {
     gridOrigin_ = MonitorOriginFor(anchor);
     startCell_ = CellAt(anchor, gridOrigin_, config::kGridSizePx);
 
-    // Find the window a release would capture. Two rules, cursor first because
-    // aiming inside a window is easy; the corner rule only gets a turn when the
-    // cursor is over the desktop, where it can still reach a window that is
-    // buried except for one exposed corner.
+    // Find what a release would capture. Three rules in order: the window under
+    // the cursor, then a window with an exposed corner in the starting cell,
+    // then the whole monitor. The corner rule has to come before the monitor
+    // one, otherwise bare desktop would always mean full screen and the case it
+    // exists for - a window buried except for one corner - would never fire.
     //
-    // Both have to run before the overlay goes up. Their exposure test asks
+    // All of this has to run before the overlay goes up. The exposure test asks
     // WindowFromPoint what owns a pixel, and once the overlay covers the screen
     // the answer is always the overlay.
     hasPick_ = false;
@@ -277,14 +278,19 @@ void CaptureSession::Begin(HWND owner) {
     pick_ = WindowPick{};
     {
         const Stopwatch pickWatch;
-        const wchar_t* rule = L"커서";
+        const wchar_t* rule = L"커서 아래 창";
         hasPick_ = PickWindowAt(anchor, &pick_);
         if (!hasPick_ && snapEnabled_) {
-            rule = L"모서리 칸";
+            rule = L"시작 칸의 창 모서리";
             hasPick_ = PickWindowByCorner(startCell_, &pick_);
         }
+        if (!hasPick_) {
+            rule = L"모니터 전체";
+            hasPick_ = PickMonitorAt(anchor, &pick_);
+        }
+        pickRule_ = hasPick_ ? rule : nullptr;
         if (hasPick_) {
-            SC_LOG(L"[세션] 창을 찾았다 (%s, %.2f ms) %ldx%ld 모서리 반지름 %d", rule,
+            SC_LOG(L"[세션] 잡을 대상 (%s, %.2f ms) %ldx%ld 모서리 반지름 %d", rule,
                    pickWatch.ElapsedMs(), pick_.frame.right - pick_.frame.left,
                    pick_.frame.bottom - pick_.frame.top, pick_.cornerRadius);
         }
@@ -383,7 +389,7 @@ void CaptureSession::Finish(HWND owner) {
 
     SC_LOG(L"[세션] 완료 %dx%d (%s)  잘라내기 %.2f / 인코딩 %.2f / 클립보드 %.2f / 저장 %.2f ms",
            shot.width, shot.height,
-           windowPick ? L"창 영역" : (snapEnabled_ ? L"격자" : L"자유"), cropMs, encodeMs,
+           windowPick ? pickRule_ : (snapEnabled_ ? L"격자" : L"자유"), cropMs, encodeMs,
            clipboardMs, saveMs);
     SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
            clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
@@ -409,6 +415,7 @@ void CaptureSession::Teardown() {
     hasPick_ = false;
     pickReleased_ = false;
     windowShownLast_ = false;
+    pickRule_ = nullptr;
     pick_ = WindowPick{};
     active_ = false;
 }
