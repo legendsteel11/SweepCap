@@ -3,6 +3,7 @@
 #include <windows.h>
 
 #include <memory>
+#include <string>
 
 #include "capture.h"
 #include "overlay.h"
@@ -80,6 +81,11 @@ private:
     bool hasPick_ = false;
     bool pickReleased_ = false;
     const wchar_t* pickRule_ = nullptr;  // which rule matched, for the log
+
+    // Names the saved file. Read when the drag starts rather than when it
+    // ends, so a window that closes underneath the capture still gets named.
+    std::wstring appName_;
+
     bool windowShownLast_ = false;
     ULONGLONG dragStartedAt_ = 0;
 };

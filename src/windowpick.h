@@ -2,6 +2,8 @@
 
 #include <windows.h>
 
+#include <string>
+
 namespace sc {
 
 struct Bitmap32;
@@ -40,6 +42,12 @@ bool PickWindowByCorner(const RECT& cell, WindowPick* out);
 // over bare desktop and no exposed corner is in reach: clicking empty space
 // captures that screen.
 bool PickMonitorAt(POINT pt, WindowPick* out);
+
+// The short name of the app a window belongs to, taken from its executable
+// ("chrome.exe" -> "Chrome"). Saved file names lead with this. Returns an
+// empty string when the owning process cannot be read, which is also what a
+// monitor pick produces, since that one has no window at all.
+std::wstring AppNameForWindow(HWND hwnd);
 
 // Clears the alpha channel in the four corners so a Windows 11 window does not
 // carry the background showing through its rounded corners. No-op when radius

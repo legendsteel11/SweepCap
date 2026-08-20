@@ -81,6 +81,10 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
     return block;
 }
 
+// Stands in for the app name when there is no window behind the capture: a
+// whole monitor, or a window whose process could not be read.
+constexpr wchar_t kUnnamedApp[] = L"Screen";
+
 // Makes sure Pictures\SweepCap\<date> exists and returns its path.
 bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     wil::unique_cotaskmem_string pictures;
@@ -224,7 +228,8 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
     return any;
 }
 
-bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath) {
+bool SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
+             std::wstring& outPath) {
     if (png.empty()) {
         return false;
     }
@@ -237,12 +242,20 @@ bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath) {
         return false;
     }
 
-    // 2026-08-18_17-23-33_451.png
-    // Milliseconds make a collision practically impossible by hand; -2, -3
-    // exist only as a backstop.
-    wchar_t stem[64];
-    if (swprintf_s(stem, L"%04u-%02u-%02u_%02u-%02u-%02u_%03u", now.wYear, now.wMonth,
-                   now.wDay, now.wHour, now.wMinute, now.wSecond, now.wMilliseconds) < 0) {
+    // Chrome_2026-08-18_17-23-33.png
+    //
+    // The app name leads because reading runs left to right. When every name
+    // opens with the same date, the only thing telling two of them apart is a
+    // pair of digits in the middle, and a folder of those is slow to scan.
+    // The date stays on so that a file dragged out of the folder into a chat
+    // or a document still says when it was taken.
+    //
+    // Two captures of one app inside the same second collide; -2, -3 catch
+    // that, and the app name keeps such a pair rare in the first place.
+    wchar_t stem[96];
+    if (swprintf_s(stem, L"%s_%04u-%02u-%02u_%02u-%02u-%02u",
+                   appName.empty() ? kUnnamedApp : appName.c_str(), now.wYear, now.wMonth,
+                   now.wDay, now.wHour, now.wMinute, now.wSecond) < 0) {
         return false;
     }
 

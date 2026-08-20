@@ -289,6 +289,11 @@ void CaptureSession::Begin(HWND owner) {
             hasPick_ = PickMonitorAt(anchor, &pick_);
         }
         pickRule_ = hasPick_ ? rule : nullptr;
+        // Named here rather than at the end of the drag: the window may be
+        // gone by then, and this is the same place that already has to run
+        // before the overlay covers the screen. A free drag keeps the name of
+        // the window it started over.
+        appName_ = AppNameForWindow(pick_.hwnd);
         if (hasPick_) {
             SC_LOG(L"[세션] 잡을 대상 (%s, %.2f ms) %ldx%ld 모서리 반지름 %d", rule,
                    pickWatch.ElapsedMs(), pick_.frame.right - pick_.frame.left,
@@ -383,7 +388,7 @@ void CaptureSession::Finish(HWND owner) {
     std::wstring path;
     if (config::kSaveToFile) {
         const Stopwatch watch;
-        saveOk = SavePng(png, path);
+        saveOk = SavePng(png, appName_, path);
         saveMs = watch.ElapsedMs();
     }
 
@@ -417,6 +422,7 @@ void CaptureSession::Teardown() {
     windowShownLast_ = false;
     pickRule_ = nullptr;
     pick_ = WindowPick{};
+    appName_.clear();
     active_ = false;
 }
 

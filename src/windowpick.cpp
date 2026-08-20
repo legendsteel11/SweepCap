@@ -2,8 +2,12 @@
 
 #include <dwmapi.h>
 #include <shellscalingapi.h>
+#include <wil/resource.h>
 
 #include <cmath>
+#include <cwchar>
+#include <cwctype>
+#include <string>
 #include <vector>
 
 #include "capture.h"
@@ -141,6 +145,60 @@ bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame) {
     return true;
 }
 
+// The file name of the executable behind a process id, "chrome.exe" style.
+std::wstring ImageBaseName(DWORD pid) {
+    if (pid == 0) {
+        return {};
+    }
+    // PROCESS_QUERY_LIMITED_INFORMATION is the access a normal-integrity
+    // process still holds against a higher-integrity one, and it is enough to
+    // read the image path.
+    wil::unique_handle process{OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid)};
+    if (!process) {
+        return {};
+    }
+    wchar_t image[MAX_PATH] = L"";
+    DWORD length = ARRAYSIZE(image);
+    if (!QueryFullProcessImageNameW(process.get(), 0, image, &length)) {
+        return {};
+    }
+    const wchar_t* slash = wcsrchr(image, L'\\');
+    return slash != nullptr ? slash + 1 : image;
+}
+
+// Turns an executable file name into the leading part of a capture file name.
+// The extension goes, and so does every character that would make the result
+// awkward to handle: the ones the file system reserves, spaces, so that a path
+// never needs quoting on a command line, and control characters. Everything
+// else survives, so an app with a non-English name keeps it.
+std::wstring AppNameFromImage(std::wstring name) {
+    constexpr size_t kMaxLength = 32;
+    constexpr wchar_t kUnusable[] = L" <>:\"/\\|?*";
+
+    if (name.size() > 4 && _wcsicmp(name.c_str() + name.size() - 4, L".exe") == 0) {
+        name.resize(name.size() - 4);
+    }
+
+    std::wstring clean;
+    for (const wchar_t c : name) {
+        if (c < 0x20 || wcschr(kUnusable, c) != nullptr) {
+            continue;
+        }
+        clean.push_back(c);
+        if (clean.size() >= kMaxLength) {
+            break;
+        }
+    }
+    // A name ending in a dot is legal to ask for and impossible to create.
+    while (!clean.empty() && clean.back() == L'.') {
+        clean.pop_back();
+    }
+    if (!clean.empty()) {
+        clean[0] = static_cast<wchar_t>(towupper(clean[0]));
+    }
+    return clean;
+}
+
 }  // namespace
 
 bool PickWindowAt(POINT pt, WindowPick* out) {
@@ -209,6 +267,34 @@ bool PickMonitorAt(POINT pt, WindowPick* out) {
     out->frame = info.rcMonitor;  // the whole screen, taskbar included
     out->cornerRadius = 0;
     return true;
+}
+
+std::wstring AppNameForWindow(HWND hwnd) {
+    if (hwnd == nullptr) {
+        return {};
+    }
+    DWORD pid = 0;
+    GetWindowThreadProcessId(hwnd, &pid);
+    std::wstring image = ImageBaseName(pid);
+
+    // Packaged apps sit inside a frame owned by ApplicationFrameHost, so the
+    // frame's own process would give every one of them the same name. The app
+    // the window actually shows owns the CoreWindow inside that frame.
+    if (_wcsicmp(image.c_str(), L"ApplicationFrameHost.exe") == 0) {
+        const HWND core = FindWindowExW(hwnd, nullptr, L"Windows.UI.Core.CoreWindow", nullptr);
+        DWORD corePid = 0;
+        if (core != nullptr) {
+            GetWindowThreadProcessId(core, &corePid);
+        }
+        if (corePid != 0 && corePid != pid) {
+            std::wstring inner = ImageBaseName(corePid);
+            if (!inner.empty()) {
+                image = std::move(inner);
+            }
+        }
+    }
+
+    return AppNameFromImage(std::move(image));
 }
 
 void CarveRoundedCorners(Bitmap32& bitmap, int radius) {

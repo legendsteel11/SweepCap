@@ -25,10 +25,14 @@ std::vector<uint8_t> EncodePng(const Bitmap32& bitmap);
 bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8_t>& png);
 
 // Saves under Pictures\SweepCap\<date>\ using the naming policy from CLAUDE.md:
-// 2026-08-18_17-23-33_451.png
+// Chrome_2026-08-18_17-23-33.png
+//
+// appName is the app the capture came from and may be empty, in which case a
+// fixed stand-in takes its place.
 //
 // Never overwrites. Colliding names get -2, -3 and so on.
 // On success outPath receives the actual path written.
-bool SavePng(const std::vector<uint8_t>& png, std::wstring& outPath);
+bool SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
+             std::wstring& outPath);
 
 }  // namespace sc
