@@ -37,14 +37,17 @@ public:
     void Finish(HWND owner);
     void Cancel(const wchar_t* reason);
 
-    // Re-reads the snap modifier and repaints if it changed. Called from the
-    // drag timer so that pressing or releasing Shift takes effect even when the
-    // mouse is standing still.
-    void RefreshSnapState();
+    // Runs on the drag timer. Picks up a change of the snap modifier and the
+    // moment the whole-window highlight becomes due, both of which have to
+    // happen even while the mouse is standing still.
+    void Tick();
 
 private:
-    RECT CurrentSelection() const;
-    bool WindowLatched() const;
+    RECT RawOrSnapped() const;
+    RECT CurrentSelection() const;  // what the overlay should show
+    bool WindowLatched() const;     // what a release would capture
+    bool WindowShown() const;       // whether the highlight is due yet
+    void UpdatePickRelease();
     void Teardown();
 
     std::unique_ptr<FrozenFrame> frame_;
@@ -59,18 +62,33 @@ private:
     bool snapEnabled_ = false;
     POINT gridOrigin_{};
 
-    // Whole-window pick. Looked up once when the drag starts, from the grid
-    // cell the drag began in. It stays selected while the cursor remains in
-    // that cell, and leaving the cell hands control back to a normal drag, so
-    // the gesture never traps the user in a selection they did not want.
+    // Whole-window pick, looked up once when the drag starts.
+    //
+    // The rule the user sees is simply "click for a window, drag for a
+    // rectangle": the pick survives until the drag passes the minimum distance
+    // and is then given up for good, so a real drag can never end up capturing
+    // a whole window.
+    //
+    // The highlight is held back briefly. On button-down there is no way to
+    // know yet whether this is a click or a drag, and painting the window
+    // immediately would make every snapped drag start with a full-window flash.
+    // A drag passes the threshold well before the delay expires, so the flash
+    // never appears; standing still brings up the highlight to say what a
+    // release would capture.
     RECT startCell_{};
     WindowPick pick_{};
     bool hasPick_ = false;
+    bool pickReleased_ = false;
+    bool windowShownLast_ = false;
+    ULONGLONG dragStartedAt_ = 0;
 };
 
 // Timer used to watch for Escape during a drag. No keyboard hook is installed,
 // so the message loop polls GetAsyncKeyState instead.
 constexpr UINT_PTR kEscapeTimerId = 1;
 constexpr UINT kEscapeTimerMs = 25;
+
+// How long the whole-window highlight waits before appearing.
+constexpr ULONGLONG kWindowHighlightDelayMs = 120;
 
 }  // namespace sc

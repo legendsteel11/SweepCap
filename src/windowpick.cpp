@@ -122,7 +122,59 @@ int CornerRadiusFor(HWND hwnd, const RECT& frame) {
     return MulDiv(dip, static_cast<int>(dpiX), 96);
 }
 
+// The shared filter: is this a top-level window worth offering as a capture
+// target? Kept separate so both picking rules apply exactly the same test.
+bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame) {
+    if (hwnd == nullptr || !IsWindowVisible(hwnd) || IsIconic(hwnd)) {
+        return false;
+    }
+    DWORD processId = 0;
+    GetWindowThreadProcessId(hwnd, &processId);
+    if (processId == ownProcess) {
+        return false;
+    }
+    if ((GetWindowLongW(hwnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0) {
+        return false;
+    }
+    if (IsCloaked(hwnd)) {
+        return false;
+    }
+    RECT frame{};
+    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_EXTENDED_FRAME_BOUNDS, &frame, sizeof(frame)))) {
+        return false;
+    }
+    if (frame.right - frame.left < kMinWindowSide ||
+        frame.bottom - frame.top < kMinWindowSide) {
+        return false;
+    }
+    if (outFrame != nullptr) {
+        *outFrame = frame;
+    }
+    return true;
+}
+
 }  // namespace
+
+bool PickWindowAt(POINT pt, WindowPick* out) {
+    if (out == nullptr) {
+        return false;
+    }
+    HWND hwnd = WindowFromPoint(pt);
+    if (hwnd == nullptr) {
+        return false;
+    }
+    // WindowFromPoint lands on the deepest child control; walk up to the frame.
+    hwnd = GetAncestor(hwnd, GA_ROOT);
+
+    RECT frame{};
+    if (!IsPickable(hwnd, GetCurrentProcessId(), &frame)) {
+        return false;
+    }
+    out->hwnd = hwnd;
+    out->frame = frame;
+    out->cornerRadius = CornerRadiusFor(hwnd, frame);
+    return true;
+}
 
 bool PickWindowByCorner(const RECT& cell, WindowPick* out) {
     if (out == nullptr) {

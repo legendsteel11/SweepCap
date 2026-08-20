@@ -148,9 +148,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                     g_session.Cancel(L"ESC");
                     return 0;
                 }
-                // Pressing or releasing Shift mid-drag takes effect even while
-                // the mouse is standing still.
-                g_session.RefreshSnapState();
+                // Shift changes and the whole-window highlight both have to
+                // land even while the mouse is standing still.
+                g_session.Tick();
                 return 0;
             }
             if (wparam == kModifierTimerId) {

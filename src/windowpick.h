@@ -6,12 +6,16 @@ namespace sc {
 
 struct Bitmap32;
 
-// Picking a whole window by the grid cell a drag starts in.
+// Picking a whole window during a snapped drag.
 //
-// Starting the drag in a cell that holds one of a window's corners selects that
-// entire window. It reaches windows that a cursor-position test cannot: another
-// window may cover most of the target, and as long as one corner is exposed the
-// target is still reachable.
+// Two rules, tried in order:
+//
+//   1. The window under the cursor. Aiming anywhere inside a window is easy,
+//      so this is what fires almost every time.
+//   2. A window with a corner in the grid cell the drag started in. This only
+//      gets a turn when the cursor is over the desktop or over something that
+//      cannot be captured, and it exists for the case rule 1 cannot serve: a
+//      target buried under other windows with only a corner still exposed.
 //
 // Enumerating and filtering top-level windows costs well under a millisecond,
 // so this runs once per drag with no caching.
@@ -22,7 +26,10 @@ struct WindowPick {
     int cornerRadius = 0;  // 0 when the window has square corners
 };
 
-// Finds the topmost window with a corner inside cell. Windows belonging to this
+// The top-level window under pt, if it is something worth capturing.
+bool PickWindowAt(POINT pt, WindowPick* out);
+
+// The topmost window with a corner inside cell. Windows belonging to this
 // process are skipped, as are windows whose matching corner is covered by
 // something else, so a target hidden behind another window is never picked.
 bool PickWindowByCorner(const RECT& cell, WindowPick* out);

@@ -160,20 +160,34 @@ void CaptureSession::DropPrewarm() {
     g_prewarmed.reset();
 }
 
-bool CaptureSession::WindowLatched() const {
-    if (!hasPick_) {
-        return false;
+bool CaptureSession::WindowLatched() const { return hasPick_ && !pickReleased_; }
+
+bool CaptureSession::WindowShown() const {
+    return WindowLatched() &&
+           GetTickCount64() - dragStartedAt_ >= kWindowHighlightDelayMs;
+}
+
+void CaptureSession::UpdatePickRelease() {
+    if (!hasPick_ || pickReleased_) {
+        return;
     }
-    // The pick holds while the cursor is still in the cell the drag started in.
+    const POINT anchor = hook::Anchor();
     const POINT current = hook::Current();
-    return PtInRect(&startCell_, current) != FALSE;
+    const double dx = static_cast<double>(current.x - anchor.x);
+    const double dy = static_cast<double>(current.y - anchor.y);
+    // Once this is a drag it stays a drag; coming back inside the threshold
+    // must not resurrect the window, or a careful small selection would turn
+    // into a whole window on release.
+    if (std::sqrt(dx * dx + dy * dy) >= config::kMinDragPixels) {
+        pickReleased_ = true;
+    }
 }
 
 RECT CaptureSession::CurrentSelection() const {
-    if (WindowLatched()) {
-        return pick_.frame;
-    }
+    return WindowShown() ? pick_.frame : RawOrSnapped();
+}
 
+RECT CaptureSession::RawOrSnapped() const {
     const RECT raw = MakeRect(hook::Anchor(), hook::Current());
     if (!snapEnabled_) {
         return raw;
@@ -204,16 +218,19 @@ RECT CaptureSession::CurrentSelection() const {
     return snapped;
 }
 
-void CaptureSession::RefreshSnapState() {
+void CaptureSession::Tick() {
     if (!active_) {
         return;
     }
+    UpdatePickRelease();
     const bool held = config::SnapModifierHeld();
-    if (held == snapEnabled_) {
+    const bool shown = WindowShown();
+    if (held == snapEnabled_ && shown == windowShownLast_) {
         return;
     }
     snapEnabled_ = held;
-    overlay_.SetSelection(CurrentSelection(), WindowLatched());
+    windowShownLast_ = shown;
+    overlay_.SetSelection(CurrentSelection(), shown);
 }
 
 void CaptureSession::Begin(HWND owner) {
@@ -247,19 +264,27 @@ void CaptureSession::Begin(HWND owner) {
     gridOrigin_ = MonitorOriginFor(anchor);
     startCell_ = CellAt(anchor, gridOrigin_, config::kGridSizePx);
 
-    // Look for a window corner in the starting cell. Only while snapping,
-    // because the cell only means anything when the grid is in play.
+    // Find the window a release would capture. Two rules, cursor first because
+    // aiming inside a window is easy; the corner rule only gets a turn when the
+    // cursor is over the desktop, where it can still reach a window that is
+    // buried except for one exposed corner.
     //
-    // This has to happen before the overlay goes up. The exposure test asks
-    // WindowFromPoint what owns the corner pixel, and once the overlay covers
-    // the screen the answer is always the overlay.
+    // Both have to run before the overlay goes up. Their exposure test asks
+    // WindowFromPoint what owns a pixel, and once the overlay covers the screen
+    // the answer is always the overlay.
     hasPick_ = false;
+    pickReleased_ = false;
     pick_ = WindowPick{};
-    if (snapEnabled_) {
+    {
         const Stopwatch pickWatch;
-        hasPick_ = PickWindowByCorner(startCell_, &pick_);
+        const wchar_t* rule = L"커서";
+        hasPick_ = PickWindowAt(anchor, &pick_);
+        if (!hasPick_ && snapEnabled_) {
+            rule = L"모서리 칸";
+            hasPick_ = PickWindowByCorner(startCell_, &pick_);
+        }
         if (hasPick_) {
-            SC_LOG(L"[세션] 시작 칸에서 창을 찾았다 (%.2f ms) %ldx%ld 모서리 반지름 %d",
+            SC_LOG(L"[세션] 창을 찾았다 (%s, %.2f ms) %ldx%ld 모서리 반지름 %d", rule,
                    pickWatch.ElapsedMs(), pick_.frame.right - pick_.frame.left,
                    pick_.frame.bottom - pick_.frame.top, pick_.cornerRadius);
         }
@@ -271,9 +296,9 @@ void CaptureSession::Begin(HWND owner) {
         Teardown();
         return;
     }
-    if (hasPick_) {
-        overlay_.SetSelection(pick_.frame, true);
-    }
+
+    dragStartedAt_ = GetTickCount64();
+    windowShownLast_ = false;
 
     active_ = true;
     SetTimer(owner_, kEscapeTimerId, kEscapeTimerMs, nullptr);
@@ -285,8 +310,10 @@ void CaptureSession::Update() {
     if (!active_) {
         return;
     }
+    UpdatePickRelease();
     snapEnabled_ = config::SnapModifierHeld();
-    overlay_.SetSelection(CurrentSelection(), WindowLatched());
+    windowShownLast_ = WindowShown();
+    overlay_.SetSelection(CurrentSelection(), windowShownLast_);
 }
 
 void CaptureSession::Finish(HWND owner) {
@@ -294,8 +321,11 @@ void CaptureSession::Finish(HWND owner) {
         return;
     }
 
+    UpdatePickRelease();
     const bool windowPick = WindowLatched();
-    const RECT selection = CurrentSelection();
+    // Uses the pick even when the highlight never had time to appear, so a
+    // quick click still captures the window.
+    const RECT selection = windowPick ? pick_.frame : RawOrSnapped();
     const POINT anchor = hook::Anchor();
     const POINT current = hook::Current();
     const double dx = static_cast<double>(current.x - anchor.x);
@@ -377,6 +407,8 @@ void CaptureSession::Teardown() {
     overlay_.Hide();
     frame_.reset();
     hasPick_ = false;
+    pickReleased_ = false;
+    windowShownLast_ = false;
     pick_ = WindowPick{};
     active_ = false;
 }
