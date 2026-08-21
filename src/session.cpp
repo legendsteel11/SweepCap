@@ -420,10 +420,17 @@ void CaptureSession::Finish(HWND owner) {
         saveMs = watch.ElapsedMs();
     }
 
-    SC_LOG(L"[세션] 완료 %dx%d (%s)  잘라내기 %.2f / 인코딩 %.2f / 클립보드 %.2f / 저장 %.2f ms",
+    // The rectangle is logged, not just its size, because a snapped selection
+    // only proves the grid origin through where its edges landed. On a monitor
+    // that starts at an offset which is not a multiple of the pitch, an origin
+    // taken from the virtual desktop instead of the monitor gives the right
+    // size and the wrong position.
+    SC_LOG(L"[세션] 완료 %dx%d (%s) rect=(%ld,%ld,%ld,%ld)  잘라내기 %.2f / 인코딩 %.2f / "
+           L"클립보드 %.2f / 저장 %.2f ms",
            shot.width, shot.height,
-           windowPick ? pickRule_ : (snapEnabled_ ? L"격자" : L"자유"), cropMs, encodeMs,
-           clipboardMs, saveMs);
+           windowPick ? pickRule_ : (snapEnabled_ ? L"격자" : L"자유"), selection.left,
+           selection.top, selection.right, selection.bottom, cropMs, encodeMs, clipboardMs,
+           saveMs);
     SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
            clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
            saveOk ? path.c_str() : L"");
