@@ -45,6 +45,7 @@ private:
     static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam);
     bool EnsureWindow();
     void Paint(HDC dc, const RECT& dirty);
+    void StepFade();
     void InvalidateForSelection(const RECT& before, const RECT& after) const;
     RECT ToClient(const RECT& virtualRect) const;
 
@@ -53,6 +54,7 @@ private:
     RECT selection_{};
     bool visible_ = false;
     bool windowMode_ = false;
+    int fadeStep_ = 0;
 
     wil::unique_hfont labelFont_;
 };

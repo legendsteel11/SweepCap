@@ -28,6 +28,19 @@ constexpr int kLabelPaddingX = 8;
 constexpr int kLabelPaddingY = 4;
 constexpr int kLabelGap = 8;
 
+// Fade-in of the whole overlay.
+//
+// Appearing at full strength in one frame reads as a flash, because the change
+// is large and instant. Stepping the window's opacity instead costs one API
+// call per step and no repainting at all.
+//
+// Kept short: the drag is already under way, and the selection is a zero-sized
+// rectangle for the first moments anyway, so there is nothing to see yet.
+constexpr UINT_PTR kFadeTimerId = 1;
+constexpr UINT kFadeStepMs = 16;   // roughly one display refresh
+constexpr int kFadeSteps = 6;      // about 96 ms in total
+constexpr BYTE kFadeStart = 40;    // not zero: something has to appear at once
+
 bool g_classRegistered = false;
 
 void FillRectColor(HDC dc, const RECT& r, COLORREF color) {
@@ -99,6 +112,13 @@ LRESULT CALLBACK Overlay::WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lpa
         case WM_ERASEBKGND:
             return 1;  // everything is painted explicitly; erasing would flicker
 
+        case WM_TIMER:
+            if (wparam == kFadeTimerId && self != nullptr) {
+                self->StepFade();
+                return 0;
+            }
+            break;
+
         case WM_PAINT: {
             PAINTSTRUCT ps{};
             HDC dc = BeginPaint(hwnd, &ps);
@@ -143,9 +163,14 @@ bool Overlay::EnsureWindow() {
         g_classRegistered = true;
     }
 
-    hwnd_ = CreateWindowExW(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE,
-                            kOverlayClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
-                            GetModuleHandleW(nullptr), this);
+    // WS_EX_LAYERED so the dimming can be faded in. The window still paints
+    // the same pixels; only its opacity changes, and DWM does that blend on
+    // the GPU. Compositing the fade ourselves would mean rewriting the whole
+    // frame once per step, which is the approach measured at 34 ms and
+    // abandoned.
+    hwnd_ = CreateWindowExW(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED, kOverlayClass,
+        L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), this);
     if (!hwnd_) {
         SC_LOG(L"[오버레이] CreateWindowEx 실패 err=%lu", GetLastError());
         return false;
@@ -175,6 +200,11 @@ bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
     wcscpy_s(lf.lfFaceName, L"Segoe UI");
     labelFont_.reset(CreateFontIndirectW(&lf));
 
+    // Set the starting opacity before the window is shown, so the first frame
+    // the user sees is already the faded one.
+    fadeStep_ = 0;
+    SetLayeredWindowAttributes(hwnd_, 0, kFadeStart, LWA_ALPHA);
+
     const RECT& bounds = frame.Bounds();
     SetWindowPos(hwnd_, HWND_TOPMOST, bounds.left, bounds.top,
                  static_cast<int>(bounds.right - bounds.left),
@@ -184,13 +214,33 @@ bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
 
     InvalidateRect(hwnd_, nullptr, FALSE);
     UpdateWindow(hwnd_);  // paint the first frame now; a late one reads as a flash
+    SetTimer(hwnd_, kFadeTimerId, kFadeStepMs, nullptr);
     return true;
+}
+
+// One step of the fade. The window content does not change, so this never
+// invalidates anything.
+void Overlay::StepFade() {
+    if (!hwnd_) {
+        return;
+    }
+    ++fadeStep_;
+    if (fadeStep_ >= kFadeSteps) {
+        KillTimer(hwnd_, kFadeTimerId);
+        SetLayeredWindowAttributes(hwnd_, 0, 255, LWA_ALPHA);
+        return;
+    }
+    const int alpha =
+        kFadeStart + (255 - kFadeStart) * fadeStep_ / kFadeSteps;
+    SetLayeredWindowAttributes(hwnd_, 0, static_cast<BYTE>(alpha), LWA_ALPHA);
 }
 
 void Overlay::Hide() {
     if (!hwnd_) {
         return;
     }
+    KillTimer(hwnd_, kFadeTimerId);
+    fadeStep_ = kFadeSteps;
     visible_ = false;
     frame_ = nullptr;
     ShowWindow(hwnd_, SW_HIDE);
