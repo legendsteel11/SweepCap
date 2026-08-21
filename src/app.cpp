@@ -402,6 +402,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 PollModifiers(hwnd);
                 return 0;
             }
+            if (wparam == kFlashTimerId) {
+                g_session.EndFlash();
+                return 0;
+            }
             break;
 
         case kTrayCallbackMessage: {

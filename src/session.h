@@ -38,6 +38,10 @@ public:
     void Finish(HWND owner);
     void Cancel(const wchar_t* reason);
 
+    // Takes the overlay down once the after-the-fact border has been shown
+    // long enough. Driven by kFlashTimerId.
+    void EndFlash();
+
     // Runs on the drag timer. Picks up a change of the snap modifier and the
     // moment the whole-window highlight becomes due, both of which have to
     // happen even while the mouse is standing still.
@@ -87,6 +91,7 @@ private:
     std::wstring appName_;
 
     bool windowShownLast_ = false;
+    bool flashing_ = false;
     ULONGLONG dragStartedAt_ = 0;
 };
 
@@ -111,5 +116,15 @@ constexpr UINT kEscapeTimerMs = 25;
 
 // How long the whole-window highlight waits before appearing.
 constexpr ULONGLONG kWindowHighlightDelayMs = 120;
+
+// Capturing a whole window from a plain click is over before the highlight was
+// ever due, so nothing appears on screen and there is no way to tell it
+// happened. The border is therefore painted once the capture is finished and
+// held briefly.
+//
+// This delays nothing. The image is cropped from the frozen frame, which does
+// not care what is on screen; only the teardown waits.
+constexpr UINT_PTR kFlashTimerId = 3;
+constexpr UINT kFlashMs = 160;
 
 }  // namespace sc

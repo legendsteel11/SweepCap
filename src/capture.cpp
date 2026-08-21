@@ -103,8 +103,14 @@ bool FrozenFrame::GrabPixels() {
 
     // Build the darkened copy the overlay lays down outside the selection.
     //
-    // Exactly half brightness, which takes one shift and one mask per pixel
-    // with no multiply. Working 64 bits at a time halves the iteration count.
+    // Five eighths of the original brightness: two shifts, two masks and an
+    // add, still with no multiply. Working 64 bits at a time halves the
+    // iteration count, and the per-byte maximum of 0x7F + 0x1F stays under
+    // 0x100 so nothing carries into the neighbouring channel.
+    //
+    // Half brightness came first and was too harsh to look at next to the
+    // undimmed selection. Three quarters is the next step if this is still
+    // too dark.
     void* dimBits = nullptr;
     wil::unique_hbitmap dimDib{
         CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &dimBits, nullptr, 0)};
@@ -114,12 +120,16 @@ bool FrozenFrame::GrabPixels() {
         auto* dst = static_cast<uint64_t*>(dimBits);
         const size_t pairs = pixelCount / 2;
         for (size_t i = 0; i < pairs; ++i) {
-            dst[i] = ((src[i] >> 1) & 0x7F7F7F7F7F7F7F7Full) | 0xFF000000FF000000ull;
+            dst[i] = (((src[i] >> 1) & 0x7F7F7F7F7F7F7F7Full) +
+                      ((src[i] >> 3) & 0x1F1F1F1F1F1F1F1Full)) |
+                     0xFF000000FF000000ull;
         }
         if ((pixelCount & 1u) != 0) {
             const auto* src32 = static_cast<const uint32_t*>(bits);
             auto* dst32 = static_cast<uint32_t*>(dimBits);
-            dst32[pixelCount - 1] = ((src32[pixelCount - 1] >> 1) & 0x7F7F7F7Fu) | 0xFF000000u;
+            const uint32_t last = src32[pixelCount - 1];
+            dst32[pixelCount - 1] =
+                (((last >> 1) & 0x7F7F7F7Fu) + ((last >> 3) & 0x1F1F1F1Fu)) | 0xFF000000u;
         }
         dimBitmap_ = std::move(dimDib);
     } else {

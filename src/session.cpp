@@ -234,7 +234,21 @@ void CaptureSession::Tick() {
     overlay_.SetSelection(CurrentSelection(), shown);
 }
 
+void CaptureSession::EndFlash() {
+    if (!flashing_) {
+        return;
+    }
+    flashing_ = false;
+    if (owner_ != nullptr) {
+        KillTimer(owner_, kFlashTimerId);
+    }
+    Teardown();
+}
+
 void CaptureSession::Begin(HWND owner) {
+    // A border still showing from the previous capture goes now rather than
+    // outliving the drag that is starting.
+    EndFlash();
     if (active_) {
         SC_LOG(L"[세션] 이미 진행 중인데 Begin이 왔다. 앞의 것을 접는다.");
         Teardown();
@@ -344,9 +358,19 @@ void CaptureSession::Finish(HWND owner) {
     const double dy = static_cast<double>(current.y - anchor.y);
     const double distance = std::sqrt(dx * dx + dy * dy);
 
-    // Take the overlay down first. Cropping reads the frozen frame either way,
-    // but clearing the screen sooner is what makes it feel immediate.
-    overlay_.Hide();
+    // A click that takes a whole window finishes before the highlight was ever
+    // due, so nothing was drawn and there is no sign it happened. Paint the
+    // border now and hold it briefly instead of clearing straight away.
+    //
+    // A drag needs none of this: its rectangle was on screen the whole time.
+    const bool flash = windowPick && !WindowShown();
+    if (flash) {
+        overlay_.SetSelection(pick_.frame, true);
+    } else {
+        // Take the overlay down first. Cropping reads the frozen frame either
+        // way, but clearing the screen sooner is what makes it feel immediate.
+        overlay_.Hide();
+    }
 
     // A whole-window pick is deliberate even without any movement, so the
     // accidental-trigger threshold does not apply to it.
@@ -421,10 +445,26 @@ void CaptureSession::Finish(HWND owner) {
         PostMessageW(host_, WM_SC_DELIVERY_FAILED, failures, 0);
     }
 
+    if (flash) {
+        // As far as input goes the session is over, so nothing tracks the
+        // mouse any more; only the teardown is waiting on the timer.
+        active_ = false;
+        KillTimer(owner_, kEscapeTimerId);
+        flashing_ = true;
+        SetTimer(owner_, kFlashTimerId, kFlashMs, nullptr);
+        return;
+    }
+
     Teardown();
 }
 
 void CaptureSession::Cancel(const wchar_t* reason) {
+    // A capture that is over but still showing its border: there is nothing to
+    // cancel, only a leftover to clear.
+    if (flashing_) {
+        EndFlash();
+        return;
+    }
     if (!active_) {
         return;
     }
@@ -435,7 +475,9 @@ void CaptureSession::Cancel(const wchar_t* reason) {
 void CaptureSession::Teardown() {
     if (owner_ != nullptr) {
         KillTimer(owner_, kEscapeTimerId);
+        KillTimer(owner_, kFlashTimerId);
     }
+    flashing_ = false;
     overlay_.Hide();
     frame_.reset();
     hasPick_ = false;
