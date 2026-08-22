@@ -434,6 +434,7 @@ void CaptureSession::Finish(HWND owner) {
     SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
            clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
            saveOk ? path.c_str() : L"");
+    SC_LOG_RESOURCES(L"캡처 후");
 
     // Say so when a capture did not arrive anywhere. Release builds compile
     // every SC_LOG away, so without this a failed save is indistinguishable

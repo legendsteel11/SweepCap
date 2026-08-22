@@ -1,5 +1,6 @@
 #include "log.h"
 
+#include <psapi.h>
 #include <shlobj.h>
 #include <wil/resource.h>
 
@@ -63,6 +64,25 @@ void Shutdown() {
 }
 
 const wchar_t* FilePath() { return g_path; }
+
+void WriteResourceUsage(const wchar_t* tag) {
+    const HANDLE self = GetCurrentProcess();
+    PROCESS_MEMORY_COUNTERS memory{};
+    memory.cb = sizeof(memory);
+    const bool haveMemory = GetProcessMemoryInfo(self, &memory, sizeof(memory)) != FALSE;
+
+    // GR_GDIOBJECTS and GR_USEROBJECTS are per-process totals. A capture
+    // creates and destroys several of each, so a healthy run returns to the
+    // same numbers rather than to zero.
+    Write(L"[자원] %s GDI=%u USER=%u 핸들=%lu 작업세트=%.1f MB", tag,
+          GetGuiResources(self, GR_GDIOBJECTS), GetGuiResources(self, GR_USEROBJECTS),
+          [] {
+              DWORD count = 0;
+              GetProcessHandleCount(GetCurrentProcess(), &count);
+              return count;
+          }(),
+          haveMemory ? static_cast<double>(memory.WorkingSetSize) / (1024.0 * 1024.0) : 0.0);
+}
 
 void Write(const wchar_t* fmt, ...) {
     wchar_t body[2048];

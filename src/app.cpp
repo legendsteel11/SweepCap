@@ -598,6 +598,8 @@ int Run(HINSTANCE instance) {
     }
 
     SC_LOG(L"트레이 상주 시작");
+    // Baseline to compare every later reading against.
+    SC_LOG_RESOURCES(L"시작");
 
     MSG msg{};
     BOOL got = 0;
