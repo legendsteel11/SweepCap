@@ -87,21 +87,30 @@ wil::unique_hmenu BuildGridMenu() {
     if (!menu) {
         return {};
     }
+    wchar_t format[64];
+    LoadText(IDS_GRID_DIVISIONS, L"%d x %d divisions", format, ARRAYSIZE(format));
+
     size_t total = 0;
-    const int* choices = settings::GridChoices(&total);
-    UINT current = IDM_GRID_FIRST;
+    const settings::GridChoice* choices = settings::GridChoices(&total);
+    bool separated = false;
     for (size_t i = 0; i < total; ++i) {
-        // A pixel count is the same in every language, so it is formatted here
-        // rather than held as one string resource per value.
-        wchar_t label[32];
-        if (swprintf_s(label, L"%d px", choices[i]) < 0) {
+        // Both kinds share one radio list, so the value carries the mode and
+        // there is nothing to choose before choosing a value. A separator marks
+        // where one kind ends and the other begins.
+        if (choices[i].ByDivision() && !separated) {
+            AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+            separated = true;
+        }
+        wchar_t label[64];
+        const int written = choices[i].ByDivision()
+                                ? swprintf_s(label, format, choices[i].cols, choices[i].rows)
+                                : swprintf_s(label, L"%d px", choices[i].px);
+        if (written < 0) {
             continue;
         }
         AppendMenuW(menu.get(), MF_STRING, IDM_GRID_FIRST + i, label);
-        if (choices[i] == settings::GridSizePx()) {
-            current = IDM_GRID_FIRST + static_cast<UINT>(i);
-        }
     }
+    const UINT current = IDM_GRID_FIRST + static_cast<UINT>(settings::GridIndex());
     CheckMenuRadioItem(menu.get(), IDM_GRID_FIRST,
                        IDM_GRID_FIRST + static_cast<UINT>(total) - 1, current, MF_BYCOMMAND);
     return menu;
@@ -437,12 +446,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 return 0;
             }
             if (id >= IDM_GRID_FIRST && id <= IDM_GRID_LAST) {
-                size_t total = 0;
-                const int* choices = settings::GridChoices(&total);
-                const size_t index = id - IDM_GRID_FIRST;
-                if (index < total) {
-                    settings::SetGridSizePx(choices[index]);
-                }
+                settings::SetGridIndex(static_cast<int>(id - IDM_GRID_FIRST));
                 return 0;
             }
             switch (id) {

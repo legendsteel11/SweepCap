@@ -47,6 +47,9 @@
 #define IDS_ERR_DELIVERY_ALL  1023
 #define IDS_ERR_CAPTURE_NONE  1024
 
+// Format string for a division grid entry, e.g. "12 x 6 분할".
+#define IDS_GRID_DIVISIONS    1025
+
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030
 #define IDS_GESTURE_CTRL_WIN       1031

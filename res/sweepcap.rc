@@ -43,6 +43,8 @@ BEGIN
     IDS_ERR_DELIVERY_ALL    "저장과 클립보드 복사가 모두 실패했습니다."
     IDS_ERR_CAPTURE_NONE    "캡처 이미지를 만들지 못했습니다."
 
+    IDS_GRID_DIVISIONS      "%d x %d 분할"
+
     IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
     IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
     IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"

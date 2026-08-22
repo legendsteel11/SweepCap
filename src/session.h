@@ -61,11 +61,11 @@ private:
     HWND owner_ = nullptr;
     bool active_ = false;
 
-    // Snapping. The grid is anchored to the top-left of the monitor the drag
+    // Snapping. The grid is anchored to the monitor the drag
     // started on, so a selection is always a whole number of cells even when
     // monitors sit at odd offsets from the virtual desktop origin.
     bool snapEnabled_ = false;
-    POINT gridOrigin_{};
+    RECT gridArea_{};
 
     // Whole-window pick, looked up once when the drag starts.
     //

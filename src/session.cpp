@@ -49,45 +49,108 @@ RECT MakeRect(POINT a, POINT b) {
     return RECT{std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
 }
 
-// Rounds to the nearest grid line, working from an origin that can be negative.
-LONG SnapToGrid(LONG value, LONG origin, LONG pitch) {
-    const LONG delta = value - origin;
-    // Floor division, so negative offsets round the same way as positive ones.
-    LONG cells = delta / pitch;
-    const LONG remainder = delta % pitch;
-    if (remainder != 0 && ((remainder < 0) != (pitch < 0))) {
-        --cells;
+// One axis of the grid: where the lines fall along a monitor's width or height.
+//
+// A pixel pitch and a division count are the same idea measured differently, so
+// both reduce to "which line is number i, and which number is nearest to this
+// coordinate". Division uses round(i * size / n) rather than i * (size / n),
+// because the accumulated error of the latter leaves the last line short of the
+// screen edge, which is the one thing division exists to get right.
+//
+// Lines continue past the monitor in both directions, at the same spacing, so a
+// selection dragged onto the next screen keeps snapping.
+class GridAxis {
+public:
+    GridAxis(LONG start, LONG size, int px, int divisions)
+        : start_(start),
+          size_(size > 0 ? size : 1),
+          px_(px),
+          divisions_(divisions > 0 ? divisions : 1) {}
+
+    LONG Line(long long index) const {
+        if (px_ > 0) {
+            return start_ + static_cast<LONG>(index * px_);
+        }
+        return start_ + static_cast<LONG>(std::llround(static_cast<double>(index) *
+                                                       size_ / divisions_));
     }
-    const LONG lower = origin + cells * pitch;
-    return (value - lower) * 2 >= pitch ? lower + pitch : lower;
+
+    long long NearestIndex(LONG value) const {
+        return std::llround(Position(value));
+    }
+
+    long long IndexBelow(LONG value) const {
+        return static_cast<long long>(std::floor(Position(value)));
+    }
+
+private:
+    // The coordinate expressed in grid lines, which need not be a whole number.
+    double Position(LONG value) const {
+        const double offset = static_cast<double>(value - start_);
+        return px_ > 0 ? offset / px_ : offset * divisions_ / size_;
+    }
+
+    LONG start_;
+    LONG size_;
+    int px_;
+    int divisions_;
+};
+
+GridAxis HorizontalAxis(const RECT& area, const settings::GridChoice& grid) {
+    return GridAxis(area.left, area.right - area.left, grid.px, grid.cols);
+}
+
+GridAxis VerticalAxis(const RECT& area, const settings::GridChoice& grid) {
+    return GridAxis(area.top, area.bottom - area.top, grid.px, grid.rows);
+}
+
+// Pushes a collapsed pair of grid lines apart by one cell.
+//
+// The drag direction decides which side moves, but at the very edge of the
+// screen that direction points off it, and a selection that lies entirely
+// outside the frozen frame cannot be cropped at all: the capture then fails
+// with nothing to show for it. A drag started on the last pixel of a screen is
+// exactly how that happens. When the preferred side would leave the frame, the
+// other one moves instead.
+void GrowOneCell(const GridAxis& axis, long long& low, long long& high, bool towardLow,
+                 LONG min, LONG max) {
+    if (low != high) {
+        return;
+    }
+    const bool lowFits = axis.Line(low - 1) >= min;
+    const bool highFits = axis.Line(high + 1) <= max;
+    if (towardLow ? lowFits : highFits) {
+        towardLow ? --low : ++high;
+    } else if (lowFits) {
+        --low;
+    } else {
+        ++high;
+    }
 }
 
 // The grid cell a point falls in.
-RECT CellAt(POINT pt, POINT origin, LONG pitch) {
-    const auto floorDiv = [pitch](LONG v) {
-        LONG q = v / pitch;
-        if (v % pitch != 0 && v < 0) {
-            --q;
-        }
-        return q;
-    };
-    const LONG cx = floorDiv(pt.x - origin.x);
-    const LONG cy = floorDiv(pt.y - origin.y);
-    return RECT{origin.x + cx * pitch, origin.y + cy * pitch, origin.x + (cx + 1) * pitch,
-                origin.y + (cy + 1) * pitch};
+RECT CellAt(POINT pt, const RECT& area, const settings::GridChoice& grid) {
+    const GridAxis x = HorizontalAxis(area, grid);
+    const GridAxis y = VerticalAxis(area, grid);
+    const long long cx = x.IndexBelow(pt.x);
+    const long long cy = y.IndexBelow(pt.y);
+    return RECT{x.Line(cx), y.Line(cy), x.Line(cx + 1), y.Line(cy + 1)};
 }
 
-// Top-left of the monitor a point sits on. Snapping is anchored here rather
-// than to the virtual desktop origin, because monitors can start at offsets
-// that are not multiples of the grid pitch.
-POINT MonitorOriginFor(POINT pt) {
+// The monitor a point sits on. The grid is anchored to this rather than to the
+// virtual desktop, because monitors can start at offsets that are not multiples
+// of the pitch, and because a division count means nothing without knowing
+// which screen it divides.
+//
+// rcMonitor, not rcWork: a capture may well want the taskbar in it.
+RECT MonitorAreaFor(POINT pt) {
     HMONITOR monitor = MonitorFromPoint(pt, MONITOR_DEFAULTTONEAREST);
     MONITORINFO info{};
     info.cbSize = sizeof(info);
     if (monitor != nullptr && GetMonitorInfoW(monitor, &info)) {
-        return POINT{info.rcMonitor.left, info.rcMonitor.top};
+        return info.rcMonitor;
     }
-    return POINT{0, 0};
+    return RECT{0, 0, 1920, 1080};
 }
 
 void CALLBACK PrewarmWork(PTP_CALLBACK_INSTANCE, PVOID, PTP_WORK) {
@@ -194,29 +257,24 @@ RECT CaptureSession::RawOrSnapped() const {
         return raw;
     }
 
-    const LONG pitch = settings::GridSizePx();
-    RECT snapped{SnapToGrid(raw.left, gridOrigin_.x, pitch),
-                 SnapToGrid(raw.top, gridOrigin_.y, pitch),
-                 SnapToGrid(raw.right, gridOrigin_.x, pitch),
-                 SnapToGrid(raw.bottom, gridOrigin_.y, pitch)};
+    const settings::GridChoice& grid = settings::Grid();
+    const GridAxis x = HorizontalAxis(gridArea_, grid);
+    const GridAxis y = VerticalAxis(gridArea_, grid);
+
+    long long left = x.NearestIndex(raw.left);
+    long long right = x.NearestIndex(raw.right);
+    long long top = y.NearestIndex(raw.top);
+    long long bottom = y.NearestIndex(raw.bottom);
 
     // Rounding both edges to the nearest line can collapse a short drag to
     // nothing. Keep at least one cell, growing in the direction of the drag.
-    if (snapped.right == snapped.left) {
-        if (hook::Current().x < hook::Anchor().x) {
-            snapped.left -= pitch;
-        } else {
-            snapped.right += pitch;
-        }
-    }
-    if (snapped.bottom == snapped.top) {
-        if (hook::Current().y < hook::Anchor().y) {
-            snapped.top -= pitch;
-        } else {
-            snapped.bottom += pitch;
-        }
-    }
-    return snapped;
+    // Working in line numbers rather than pixels matters for division grids,
+    // where neighbouring lines are not always the same distance apart.
+    const RECT limit = frame_ ? frame_->Bounds() : RECT{LONG_MIN, LONG_MIN, LONG_MAX, LONG_MAX};
+    GrowOneCell(x, left, right, hook::Current().x < hook::Anchor().x, limit.left, limit.right);
+    GrowOneCell(y, top, bottom, hook::Current().y < hook::Anchor().y, limit.top, limit.bottom);
+
+    return RECT{x.Line(left), y.Line(top), x.Line(right), y.Line(bottom)};
 }
 
 void CaptureSession::Tick() {
@@ -276,8 +334,8 @@ void CaptureSession::Begin(HWND owner) {
     }
 
     snapEnabled_ = settings::SnapModifierHeld();
-    gridOrigin_ = MonitorOriginFor(anchor);
-    startCell_ = CellAt(anchor, gridOrigin_, settings::GridSizePx());
+    gridArea_ = MonitorAreaFor(anchor);
+    startCell_ = CellAt(anchor, gridArea_, settings::Grid());
 
     // Find what a release would capture. Three rules in order: the window under
     // the cursor, then a window with an exposed corner in the starting cell,

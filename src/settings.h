@@ -53,10 +53,30 @@ void SetGestureIndex(int index);
 bool ModifiersHeld();
 bool SnapModifierHeld();
 
-// Grid pitch for snapped selections.
-const int* GridChoices(size_t* count);
-int GridSizePx();
-void SetGridSizePx(int px);
+// Grid for snapped selections.
+//
+// A value is either a fixed pixel pitch or a number of divisions of the
+// monitor, and the value itself says which. Keeping both kinds in one list
+// means offering the choice costs no extra setting: there is no mode to pick
+// before picking a value.
+//
+// The two are not interchangeable. A pixel pitch keeps a cell the same size on
+// every monitor, which is what aligning to a button edge needs. Divisions
+// always land on the screen edges, which a pitch only manages by luck: a 32 px
+// grid on a 1366 wide screen leaves a half cell at the right that can never be
+// snapped to.
+struct GridChoice {
+    int px;    // 0 when this is a division choice
+    int cols;  // 0 when this is a pixel choice
+    int rows;
+
+    bool ByDivision() const { return px <= 0; }
+};
+
+const GridChoice* GridChoices(size_t* count);
+int GridIndex();
+void SetGridIndex(int index);
+const GridChoice& Grid();
 
 // The folder captures go under, before the per-date subfolder. Never empty:
 // when nothing is configured this resolves to Pictures\SweepCap.

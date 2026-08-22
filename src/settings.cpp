@@ -30,13 +30,20 @@ constexpr Gesture kGestures[] = {
     {kCtrl | kShift | kWin, kAlt, IDS_GESTURE_CTRL_SHIFT_WIN},
 };
 
-constexpr int kGridChoices[] = {16, 24, 32, 48, 64};
-constexpr int kDefaultGridPx = 32;
+// Pixel pitches first, then divisions. Index 2 (32 px) is the default.
+//
+// The division entries exist so a capture can be lined up with the same grid
+// the window sizes use, and so a selection can reach the screen edge exactly.
+constexpr GridChoice kGridChoices[] = {
+    {16, 0, 0}, {24, 0, 0}, {32, 0, 0}, {48, 0, 0}, {64, 0, 0},
+    {0, 12, 6}, {0, 24, 12},
+};
+constexpr int kDefaultGridIndex = 2;
 
 constexpr wchar_t kRunKeyPath[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 int g_gestureIndex = 0;
-int g_gridPx = kDefaultGridPx;
+int g_gridIndex = kDefaultGridIndex;
 std::wstring g_captureRoot;      // resolved, never empty after Load
 std::wstring g_configuredRoot;   // what the INI holds, empty when default
 std::wstring g_iniPath;
@@ -134,15 +141,20 @@ void Load() {
         }
     }
 
-    const int savedGrid =
-        g_iniPath.empty()
-            ? kDefaultGridPx
-            : GetPrivateProfileIntW(L"capture", L"grid", kDefaultGridPx, g_iniPath.c_str());
-    g_gridPx = kDefaultGridPx;
-    for (const int choice : kGridChoices) {
-        if (choice == savedGrid) {
-            g_gridPx = choice;
-            break;
+    // The grid is stored as the value itself rather than a menu position, for
+    // the same reason as the gesture: reordering the list later must not
+    // change what an existing installation does.
+    g_gridIndex = kDefaultGridIndex;
+    if (!g_iniPath.empty()) {
+        const int px = GetPrivateProfileIntW(L"capture", L"grid", 0, g_iniPath.c_str());
+        const int cols = GetPrivateProfileIntW(L"capture", L"gridcols", 0, g_iniPath.c_str());
+        const int rows = GetPrivateProfileIntW(L"capture", L"gridrows", 0, g_iniPath.c_str());
+        for (size_t i = 0; i < ARRAYSIZE(kGridChoices); ++i) {
+            const GridChoice& choice = kGridChoices[i];
+            if (choice.px == px && choice.cols == cols && choice.rows == rows) {
+                g_gridIndex = static_cast<int>(i);
+                break;
+            }
         }
     }
 
@@ -160,8 +172,15 @@ void Load() {
     }
     ApplyCaptureRoot(folder);
 
-    SC_LOG(L"[설정] 수식키=%d 격자=%dpx 폴더=%s%s", kGestures[g_gestureIndex].modifiers,
-           g_gridPx, g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (기본)" : L"");
+    const GridChoice& grid = kGridChoices[g_gridIndex];
+    if (grid.ByDivision()) {
+        SC_LOG(L"[설정] 수식키=%d 격자=%dx%d 분할 폴더=%s%s",
+               kGestures[g_gestureIndex].modifiers, grid.cols, grid.rows,
+               g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (기본)" : L"");
+    } else {
+        SC_LOG(L"[설정] 수식키=%d 격자=%dpx 폴더=%s%s", kGestures[g_gestureIndex].modifiers,
+               grid.px, g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (기본)" : L"");
+    }
 }
 
 const Gesture* Gestures(size_t* count) {
@@ -193,26 +212,34 @@ bool SnapModifierHeld() {
     return MaskHeld(kGestures[g_gestureIndex].snap);
 }
 
-const int* GridChoices(size_t* count) {
+const GridChoice* GridChoices(size_t* count) {
     if (count != nullptr) {
         *count = ARRAYSIZE(kGridChoices);
     }
     return kGridChoices;
 }
 
-int GridSizePx() {
-    return g_gridPx;
+int GridIndex() {
+    return g_gridIndex;
 }
 
-void SetGridSizePx(int px) {
-    for (const int choice : kGridChoices) {
-        if (choice != px) {
-            continue;
-        }
-        g_gridPx = px;
-        WriteInt(L"capture", L"grid", px);
-        SC_LOG(L"[설정] 격자 변경 %dpx", px);
+const GridChoice& Grid() {
+    return kGridChoices[g_gridIndex];
+}
+
+void SetGridIndex(int index) {
+    if (index < 0 || index >= static_cast<int>(ARRAYSIZE(kGridChoices))) {
         return;
+    }
+    g_gridIndex = index;
+    const GridChoice& choice = kGridChoices[index];
+    WriteInt(L"capture", L"grid", choice.px);
+    WriteInt(L"capture", L"gridcols", choice.cols);
+    WriteInt(L"capture", L"gridrows", choice.rows);
+    if (choice.ByDivision()) {
+        SC_LOG(L"[설정] 격자 변경 %d x %d 분할", choice.cols, choice.rows);
+    } else {
+        SC_LOG(L"[설정] 격자 변경 %dpx", choice.px);
     }
 }
 
