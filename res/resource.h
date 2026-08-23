@@ -10,6 +10,7 @@
 #define IDM_FOLDER_DEFAULT 40005
 #define IDM_RUN_AT_STARTUP 40006
 #define IDM_ABOUT          40007
+#define IDM_FOLDER_NO_DATE 40008
 
 // Command ranges for the radio submenus. The item id carries the index, so
 // handling a click is one subtraction and no lookup table.
@@ -72,6 +73,7 @@
 // clipboard. The copy button is what swaps one for the other.
 #define IDS_ABOUT_AUTHOR_COPIED  1044
 #define IDS_ABOUT_COPY_EMAIL     1045
+#define IDS_MENU_FOLDER_NO_DATE  1046
 
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030

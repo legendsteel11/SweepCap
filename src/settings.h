@@ -116,6 +116,12 @@ bool CaptureRootIsDefault();
 // Passing nullptr or an empty string restores the default.
 void SetCaptureRoot(const wchar_t* path);
 
+// Whether captures are filed into a per-date subfolder under the root. Off
+// keeps everything directly in the root, for a folder that is bookmarked and
+// browsed in one place; the file names carry the date either way.
+bool DateFolders();
+void SetDateFolders(bool on);
+
 // Backed by the HKCU Run key, so no elevation is involved.
 //
 // Reading it tells you whether the value exists, not whether Windows will act

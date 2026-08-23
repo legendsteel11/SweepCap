@@ -70,6 +70,7 @@ int g_windowGridIndex = kDefaultWindowGridIndex;
 std::atomic<int> g_dimIndex{kDefaultDimIndex};
 std::wstring g_captureRoot;      // resolved, never empty after Load
 std::wstring g_configuredRoot;   // what the INI holds, empty when default
+bool g_dateFolders = true;
 std::wstring g_iniPath;
 
 bool KeyDown(int vk) {
@@ -207,6 +208,9 @@ void Load() {
         }
     }
     g_dimIndex.store(dimIndex, std::memory_order_relaxed);
+
+    g_dateFolders = g_iniPath.empty() ||
+                    GetPrivateProfileIntW(L"save", L"datefolders", 1, g_iniPath.c_str()) != 0;
 
     wchar_t folder[MAX_PATH] = L"";
     if (!g_iniPath.empty()) {
@@ -362,6 +366,19 @@ void SetCaptureRoot(const wchar_t* path) {
     WriteText(L"save", L"folder", toDefault ? nullptr : path);
     SC_LOG(L"[settings] save folder changed %s%s", g_captureRoot.c_str(),
            toDefault ? L" (default)" : L"");
+}
+
+bool DateFolders() {
+    return g_dateFolders;
+}
+
+void SetDateFolders(bool on) {
+    if (g_dateFolders == on) {
+        return;
+    }
+    g_dateFolders = on;
+    WriteInt(L"save", L"datefolders", on ? 1 : 0);
+    SC_LOG(L"[settings] date subfolders %s", on ? L"on" : L"off");
 }
 
 bool RunAtStartup() {

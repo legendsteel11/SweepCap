@@ -193,6 +193,15 @@ wil::unique_hmenu BuildFolderMenu() {
         menu.get(), MF_STRING | (settings::CaptureRootIsDefault() ? MF_GRAYED : 0),
         IDM_FOLDER_DEFAULT,
         LoadText(IDS_MENU_FOLDER_DEFAULT, L"Restore default folder", label, ARRAYSIZE(label)));
+    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+    // Checked means captures land directly in the root, for a folder that is
+    // bookmarked and browsed in one place. The file names carry the date
+    // either way.
+    AppendMenuW(menu.get(),
+                MF_STRING | (settings::DateFolders() ? MF_UNCHECKED : MF_CHECKED),
+                IDM_FOLDER_NO_DATE,
+                LoadText(IDS_MENU_FOLDER_NO_DATE, L"No date subfolders", label,
+                         ARRAYSIZE(label)));
     return menu;
 }
 
@@ -390,15 +399,19 @@ void OpenCaptureFolder() {
     if (root.empty()) {
         return;
     }
-    SYSTEMTIME now{};
-    GetLocalTime(&now);
+    // With date folders off the next capture lands in the root, so that is the
+    // folder to show even while older date folders still exist.
+    if (settings::DateFolders()) {
+        SYSTEMTIME now{};
+        GetLocalTime(&now);
 
-    wchar_t today[MAX_PATH];
-    if (swprintf_s(today, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
-                   now.wDay) >= 0 &&
-        GetFileAttributesW(today) != INVALID_FILE_ATTRIBUTES) {
-        ShellExecuteW(nullptr, L"open", today, nullptr, nullptr, SW_SHOWNORMAL);
-        return;
+        wchar_t today[MAX_PATH];
+        if (swprintf_s(today, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
+                       now.wDay) >= 0 &&
+            GetFileAttributesW(today) != INVALID_FILE_ATTRIBUTES) {
+            ShellExecuteW(nullptr, L"open", today, nullptr, nullptr, SW_SHOWNORMAL);
+            return;
+        }
     }
     // Before the first capture of the day the root may not exist yet.
     SHCreateDirectoryExW(nullptr, root.c_str(), nullptr);
@@ -786,6 +799,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                     return 0;
                 case IDM_FOLDER_DEFAULT:
                     settings::SetCaptureRoot(nullptr);
+                    return 0;
+                case IDM_FOLDER_NO_DATE:
+                    settings::SetDateFolders(!settings::DateFolders());
                     return 0;
                 case IDM_RUN_AT_STARTUP:
                     ToggleRunAtStartup(hwnd);

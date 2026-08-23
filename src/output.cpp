@@ -85,7 +85,9 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
 // whole monitor, or a window whose process could not be read.
 constexpr wchar_t kUnnamedApp[] = L"Screen";
 
-// Makes sure <capture root>\<date> exists and returns its path.
+// Makes sure the folder captures land in exists and returns its path: the
+// per-date subfolder under the capture root, or the root itself when date
+// folders are turned off.
 bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     const std::wstring& root = settings::CaptureRoot();
     if (root.empty()) {
@@ -94,8 +96,12 @@ bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     }
 
     wchar_t folder[MAX_PATH];
-    if (swprintf_s(folder, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
-                   now.wDay) < 0) {
+    if (settings::DateFolders()) {
+        if (swprintf_s(folder, L"%s\\%04u-%02u-%02u", root.c_str(), now.wYear, now.wMonth,
+                       now.wDay) < 0) {
+            return false;
+        }
+    } else if (swprintf_s(folder, L"%s", root.c_str()) < 0) {
         return false;
     }
 
