@@ -10,8 +10,10 @@
 #define SWEEPCAP_NAME        "SweepCap"
 #define SWEEPCAP_NAME_W     L"SweepCap"
 
-#define SWEEPCAP_VERSION     "1.0.0.0"
-#define SWEEPCAP_VERSION_W  L"1.0.0.0"
+// The display string is three parts; the comma form is the FILEVERSION field
+// of the version resource, which requires four.
+#define SWEEPCAP_VERSION     "1.0.0"
+#define SWEEPCAP_VERSION_W  L"1.0.0"
 #define SWEEPCAP_VER_COMMA   1,0,0,0
 
 // Public contact, shown in the About box and the version resource.
