@@ -178,6 +178,19 @@ void CALLBACK GhostTick(HWND, UINT, UINT_PTR, DWORD) {
         return;
     }
 
+    // A window destroyed mid-drag may never send MOVESIZEEND. Left alone, this
+    // timer would spin forever and WindowDragActive() would stay true, which
+    // silently keeps prewarming suppressed and every later capture slow.
+    if (!IsWindow(target)) {
+        g_dragging = nullptr;
+        if (g_ghost != nullptr) {
+            KillTimer(g_ghost, kGhostTimerId);
+        }
+        HideGhost();
+        SC_LOG(L"[winsnap] dragged window disappeared; drag state cleared");
+        return;
+    }
+
     RECT frame{};
     RECT snapped{};
     if (!settings::ModifiersHeld() || !VisibleFrame(target, &frame) ||
