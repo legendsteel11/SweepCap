@@ -168,6 +168,11 @@ bool Overlay::EnsureWindow() {
     // the GPU. Compositing the fade ourselves would mean rewriting the whole
     // frame once per step, which is the approach measured at 34 ms and
     // abandoned.
+    //
+    // Not WS_EX_TRANSPARENT: the overlay is what shows the cross cursor, and
+    // it only receives WM_SETCURSOR while it takes part in hit testing. Window
+    // picking is safe regardless, because every pick runs before the overlay
+    // is shown.
     hwnd_ = CreateWindowExW(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED, kOverlayClass,
         L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), this);

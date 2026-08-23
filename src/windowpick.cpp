@@ -40,7 +40,6 @@ struct Candidate {
 };
 
 struct EnumState {
-    DWORD ownProcess;
     std::vector<Candidate> found;
 };
 
@@ -52,12 +51,12 @@ bool IsCloaked(HWND hwnd) {
     return cloaked != FALSE;
 }
 
-bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame);
+bool IsPickable(HWND hwnd, RECT* outFrame);
 
 BOOL CALLBACK EnumProc(HWND hwnd, LPARAM param) {
     auto* state = reinterpret_cast<EnumState*>(param);
     RECT frame{};
-    if (IsPickable(hwnd, state->ownProcess, &frame)) {
+    if (IsPickable(hwnd, &frame)) {
         state->found.push_back(Candidate{hwnd, frame});
     }
     return TRUE;
@@ -116,13 +115,15 @@ int CornerRadiusFor(HWND hwnd, const RECT& frame) {
 // WS_EX_TOOLWINDOW is not a rejection. That style is exactly what keeps a
 // window out of Alt+Tab, which is what tray utilities set, and filtering on it
 // made every tray-only application uncapturable.
-bool IsPickable(HWND hwnd, DWORD ownProcess, RECT* outFrame) {
+//
+// The application's own process is not a rejection either. It once was, and
+// that made every SweepCap dialog fall through to the whole-monitor rule when
+// clicked. The windows the filter meant to hide take care of themselves: every
+// pick runs before the overlay is shown (a session begins by taking down even
+// the border still flashing from the last capture), the snap ghost is
+// click-through, and the host window is never visible.
+bool IsPickable(HWND hwnd, RECT* outFrame) {
     if (hwnd == nullptr || !IsWindowVisible(hwnd) || IsIconic(hwnd)) {
-        return false;
-    }
-    DWORD processId = 0;
-    GetWindowThreadProcessId(hwnd, &processId);
-    if (processId == ownProcess) {
         return false;
     }
     if (IsDesktopClass(hwnd)) {
@@ -213,7 +214,7 @@ bool PickWindowAt(POINT pt, WindowPick* out) {
     hwnd = GetAncestor(hwnd, GA_ROOT);
 
     RECT frame{};
-    if (!IsPickable(hwnd, GetCurrentProcessId(), &frame)) {
+    if (!IsPickable(hwnd, &frame)) {
         return false;
     }
     out->hwnd = hwnd;
@@ -228,7 +229,6 @@ bool PickWindowByCorner(const RECT& cell, WindowPick* out) {
     }
 
     EnumState state{};
-    state.ownProcess = GetCurrentProcessId();
     EnumWindows(EnumProc, reinterpret_cast<LPARAM>(&state));
 
     // EnumWindows walks front to back, so the first match is the topmost.
