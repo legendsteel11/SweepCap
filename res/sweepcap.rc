@@ -65,6 +65,58 @@ BEGIN
     IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (격자 스냅 +Alt)"
 END
 
+// English. LoadString picks the block by the thread UI language, so this is
+// what every non-Korean Windows shows. Keep the identifiers in step with the
+// Korean block above.
+
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+
+STRINGTABLE
+BEGIN
+    IDS_TRAY_TIP   SWEEPCAP_NAME
+    IDS_MENU_EXIT  "Exit"
+    IDS_ERR_TRAY   "Could not register the tray icon."
+    IDS_ERR_HOOK   "Could not install the mouse hook.\nRegion capture is disabled."
+
+    IDS_MENU_OPEN_FOLDER    "Open capture folder"
+    IDS_MENU_GESTURE        "Change shortcut"
+    IDS_MENU_GRID           "Capture grid"
+    IDS_MENU_FOLDER         "Save folder"
+    IDS_MENU_FOLDER_CHANGE  "Change..."
+    IDS_MENU_FOLDER_DEFAULT "Restore the default folder"
+    IDS_MENU_STARTUP        "Run at startup"
+    IDS_FOLDER_PICK_TITLE   "Choose where captures are saved"
+    IDS_ERR_STARTUP         "Could not change the startup entry."
+
+    IDS_ERR_CAPTURE_TITLE   "Capture failed"
+    IDS_ERR_SAVE_ONLY       "Could not save to a file. The capture was copied to the clipboard."
+    IDS_ERR_CLIP_ONLY       "Could not copy to the clipboard. The capture was saved to a file."
+    IDS_ERR_DELIVERY_ALL    "Saving to a file and copying to the clipboard both failed."
+    IDS_ERR_CAPTURE_NONE    "Could not produce the capture image."
+
+    IDS_GRID_DIVISIONS      "%d x %d divisions"
+
+    IDS_MENU_DIM            "Dim outside"
+    IDS_MENU_WINDOW_GRID    "Window grid"
+    IDS_DIM_OFF             "Off"
+    IDS_DIM_LIGHT           "Light"
+    IDS_DIM_NORMAL          "Normal"
+    IDS_DIM_STRONG          "Strong"
+
+    IDS_MENU_ABOUT          "About"
+    IDS_ABOUT_AUTHOR        "Author: " SWEEPCAP_AUTHOR_EMAIL
+    IDS_ABOUT_AUTHOR_COPIED "Author: " SWEEPCAP_AUTHOR_EMAIL " (copied)"
+    IDS_ABOUT_COPY_EMAIL    "Copy email address"
+    IDS_ABOUT_GITHUB     "GitHub: <a href=""https://github.com/legendsteel11"">github.com/legendsteel11</a>"
+    IDS_ABOUT_THIRDPARTY "This application includes Microsoft WIL (MIT License)."
+
+    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (grid snap +Shift)"
+    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (grid snap +Shift)"
+    IDS_GESTURE_ALT_WIN        "Alt+Win (grid snap +Shift)"
+    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (grid snap +Shift)"
+    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (grid snap +Alt)"
+END
+
 /////////////////////////////////////////////////////////////////////////////
 // Version
 VS_VERSION_INFO VERSIONINFO
