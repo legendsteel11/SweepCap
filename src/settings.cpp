@@ -31,6 +31,12 @@ constexpr Gesture kGestures[] = {
     {kCtrl | kShift | kWin, kAlt, IDS_GESTURE_CTRL_SHIFT_WIN},
 };
 
+// Ctrl+Win rather than Ctrl+Alt. Almost no application claims a Win-key
+// combination, while Ctrl+Alt collides with application shortcuts and is what
+// AltGr sends on many European layouts. The price is that Win combinations do
+// not cross into windowed RDP sessions, which changing the gesture covers.
+constexpr int kDefaultGestureIndex = 1;
+
 // Pixel pitches first, then divisions. Index 2 (32 px) is the default.
 //
 // The division entries exist so a capture can be lined up with the same grid
@@ -62,7 +68,7 @@ constexpr int kDefaultDimIndex = 2;  // five eighths
 
 constexpr wchar_t kRunKeyPath[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
-int g_gestureIndex = 0;
+int g_gestureIndex = kDefaultGestureIndex;
 int g_gridIndex = kDefaultGridIndex;
 int g_windowGridIndex = kDefaultWindowGridIndex;
 // Read by the worker thread that builds the darkened copy, written only by the
@@ -158,7 +164,7 @@ void Load() {
         g_iniPath.empty()
             ? 0
             : GetPrivateProfileIntW(L"gesture", L"modifiers", 0, g_iniPath.c_str());
-    g_gestureIndex = 0;
+    g_gestureIndex = kDefaultGestureIndex;
     for (size_t i = 0; i < ARRAYSIZE(kGestures); ++i) {
         if (kGestures[i].modifiers == savedMask) {
             g_gestureIndex = static_cast<int>(i);
