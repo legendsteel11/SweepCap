@@ -416,13 +416,14 @@ void CaptureSession::Finish(HWND owner) {
     }
 
     double saveMs = 0.0;
-    bool saveOk = false;
+    SaveResult saveResult = SaveResult::kFailed;
     std::wstring path;
     if (config::kSaveToFile) {
         const Stopwatch watch;
-        saveOk = SavePng(png, appName_, path);
+        saveResult = SavePng(png, appName_, path);
         saveMs = watch.ElapsedMs();
     }
+    const bool saveOk = saveResult != SaveResult::kFailed;
 
     // The rectangle is logged, not just its size, because a snapped selection
     // only proves the grid origin through where its edges landed. On a monitor
@@ -440,15 +441,19 @@ void CaptureSession::Finish(HWND owner) {
            saveOk ? path.c_str() : L"");
     SC_LOG_RESOURCES(L"after capture");
 
-    // Say so when a capture did not arrive anywhere. Release builds compile
-    // every SC_LOG away, so without this a failed save is indistinguishable
-    // from a successful one: the overlay disappears either way.
+    // Say so when a capture did not arrive anywhere, or arrived somewhere the
+    // user did not choose. Release builds compile every SC_LOG away, so
+    // without this a failed save is indistinguishable from a successful one:
+    // the overlay disappears either way.
     WPARAM failures = 0;
     if (config::kCopyToClipboard && !clipboardOk) {
         failures |= kDeliveryClipboardFailed;
     }
     if (config::kSaveToFile && !saveOk) {
         failures |= kDeliverySaveFailed;
+    }
+    if (saveResult == SaveResult::kSavedToDefault) {
+        failures |= kDeliverySaveFellBack;
     }
     if (png.empty()) {
         failures |= kDeliveryCaptureFailed;

@@ -86,10 +86,10 @@ wil::unique_hglobal MakeDibV5(const Bitmap32& bitmap) {
 constexpr wchar_t kUnnamedApp[] = L"Screen";
 
 // Makes sure the folder captures land in exists and returns its path: the
-// per-date subfolder under the capture root, or the root itself when date
+// per-date subfolder under the given root, or the root itself when date
 // folders are turned off.
-bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
-    const std::wstring& root = settings::CaptureRoot();
+bool EnsureCaptureFolder(const std::wstring& root, const SYSTEMTIME& now,
+                         std::wstring& outFolder) {
     if (root.empty()) {
         SC_LOG(L"[save] could not determine the save folder.");
         return false;
@@ -114,6 +114,49 @@ bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
 
     outFolder.assign(folder);
     return true;
+}
+
+// Writes the PNG bytes under one specific folder. Colliding names get -2, -3
+// and so on; any other error gives up on this folder.
+bool WriteUnderFolder(const std::wstring& folder, const wchar_t* stem,
+                      const std::vector<uint8_t>& png, std::wstring& outPath) {
+    for (int attempt = 1; attempt <= 99; ++attempt) {
+        wchar_t path[MAX_PATH];
+        int written = 0;
+        if (attempt == 1) {
+            written = swprintf_s(path, L"%s\\%s.png", folder.c_str(), stem);
+        } else {
+            written = swprintf_s(path, L"%s\\%s-%d.png", folder.c_str(), stem, attempt);
+        }
+        if (written < 0) {
+            return false;
+        }
+
+        // CREATE_NEW: an existing file makes this fail and the loop moves to
+        // the next number. There is no code path that overwrites.
+        wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW,
+                                           FILE_ATTRIBUTE_NORMAL, nullptr)};
+        if (!file) {
+            const DWORD error = GetLastError();
+            if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) {
+                continue;
+            }
+            SC_LOG(L"[save] file creation failed err=%lu %s", error, path);
+            return false;
+        }
+
+        DWORD wrote = 0;
+        if (!WriteFile(file.get(), png.data(), static_cast<DWORD>(png.size()), &wrote, nullptr) ||
+            wrote != png.size()) {
+            SC_LOG(L"[save] write failed err=%lu %s", GetLastError(), path);
+            return false;
+        }
+        outPath.assign(path);
+        return true;
+    }
+
+    SC_LOG(L"[save] names keep colliding; giving up.");
+    return false;
 }
 
 }  // namespace
@@ -232,19 +275,14 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
     return any;
 }
 
-bool SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
-             std::wstring& outPath) {
+SaveResult SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
+                   std::wstring& outPath) {
     if (png.empty()) {
-        return false;
+        return SaveResult::kFailed;
     }
 
     SYSTEMTIME now{};
     GetLocalTime(&now);
-
-    std::wstring folder;
-    if (!EnsureCaptureFolder(now, folder)) {
-        return false;
-    }
 
     // Chrome_2026-08-18_17-23-33.png
     //
@@ -260,46 +298,30 @@ bool SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
     if (swprintf_s(stem, L"%s_%04u-%02u-%02u_%02u-%02u-%02u",
                    appName.empty() ? kUnnamedApp : appName.c_str(), now.wYear, now.wMonth,
                    now.wDay, now.wHour, now.wMinute, now.wSecond) < 0) {
-        return false;
+        return SaveResult::kFailed;
     }
 
-    for (int attempt = 1; attempt <= 99; ++attempt) {
-        wchar_t path[MAX_PATH];
-        int written = 0;
-        if (attempt == 1) {
-            written = swprintf_s(path, L"%s\\%s.png", folder.c_str(), stem);
-        } else {
-            written = swprintf_s(path, L"%s\\%s-%d.png", folder.c_str(), stem, attempt);
-        }
-        if (written < 0) {
-            return false;
-        }
-
-        // CREATE_NEW: an existing file makes this fail and the loop moves to
-        // the next number. There is no code path that overwrites.
-        wil::unique_hfile file{CreateFileW(path, GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-                                           FILE_ATTRIBUTE_NORMAL, nullptr)};
-        if (!file) {
-            const DWORD error = GetLastError();
-            if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) {
-                continue;
-            }
-            SC_LOG(L"[save] file creation failed err=%lu %s", error, path);
-            return false;
-        }
-
-        DWORD wrote = 0;
-        if (!WriteFile(file.get(), png.data(), static_cast<DWORD>(png.size()), &wrote, nullptr) ||
-            wrote != png.size()) {
-            SC_LOG(L"[save] write failed err=%lu %s", GetLastError(), path);
-            return false;
-        }
-        outPath.assign(path);
-        return true;
+    std::wstring folder;
+    if (EnsureCaptureFolder(settings::CaptureRoot(), now, folder) &&
+        WriteUnderFolder(folder, stem, png, outPath)) {
+        return SaveResult::kSaved;
     }
 
-    SC_LOG(L"[save] names keep colliding; giving up.");
-    return false;
+    // A configured folder can stop working while the app runs: the drive is
+    // unplugged, a permission is revoked, the path was mistyped. The capture
+    // is not dropped for that; it goes to the default folder instead. The
+    // setting is deliberately left alone, so the configured folder takes over
+    // again the moment it works. Not the parent folder: that could be a drive
+    // root, and it is nowhere the user ever chose.
+    if (settings::CaptureRootIsDefault()) {
+        return SaveResult::kFailed;
+    }
+    if (!EnsureCaptureFolder(settings::DefaultCaptureRoot(), now, folder) ||
+        !WriteUnderFolder(folder, stem, png, outPath)) {
+        return SaveResult::kFailed;
+    }
+    SC_LOG(L"[save] configured folder unusable; diverted to %s", outPath.c_str());
+    return SaveResult::kSavedToDefault;
 }
 
 }  // namespace sc

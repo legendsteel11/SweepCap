@@ -107,6 +107,10 @@ enum DeliveryFailure : WPARAM {
     kDeliveryClipboardFailed = 1 << 0,
     kDeliverySaveFailed = 1 << 1,
     kDeliveryCaptureFailed = 1 << 2,  // nothing was produced to deliver
+    // The save worked, but into the default folder because the configured one
+    // was unusable. Reported through the same channel: a file that quietly
+    // lands somewhere else is as good as lost. Never set with SaveFailed.
+    kDeliverySaveFellBack = 1 << 3,
 };
 
 // Timer used to watch for Escape during a drag. No keyboard hook is installed,

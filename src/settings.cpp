@@ -99,18 +99,6 @@ bool MaskHeld(int mask) {
     return mask != 0;
 }
 
-// Pictures\SweepCap, the folder used when nothing else is configured.
-std::wstring DefaultCaptureRoot() {
-    wil::unique_cotaskmem_string pictures;
-    if (FAILED(SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &pictures))) {
-        return {};
-    }
-    std::wstring root = pictures.get();
-    root += L'\\';
-    root += SWEEPCAP_NAME_W;
-    return root;
-}
-
 // %LOCALAPPDATA%\SweepCap\sweepcap.ini, beside the debug log.
 std::wstring ResolveIniPath() {
     wil::unique_cotaskmem_string base;
@@ -223,12 +211,13 @@ void Load() {
         GetPrivateProfileStringW(L"save", L"folder", L"", folder, ARRAYSIZE(folder),
                                  g_iniPath.c_str());
     }
-    // A folder that has since been removed or unplugged falls back to the
-    // default rather than failing at the end of a capture, when the image
-    // would already be lost.
+    // A configured folder that is unreachable right now is kept anyway. Each
+    // save tries it first and diverts to the default folder with a balloon
+    // when it fails, so nothing is lost and nothing moves silently; and the
+    // moment the folder comes back (a drive replugged), captures return to it
+    // without a restart. Dropping it here instead would do both silently.
     if (folder[0] != L'\0' && GetFileAttributesW(folder) == INVALID_FILE_ATTRIBUTES) {
-        SC_LOG(L"[settings] save folder is gone; falling back to the default. %s", folder);
-        folder[0] = L'\0';
+        SC_LOG(L"[settings] configured save folder is unreachable right now: %s", folder);
     }
     ApplyCaptureRoot(folder);
 
@@ -364,6 +353,17 @@ const std::wstring& CaptureRoot() {
 
 bool CaptureRootIsDefault() {
     return g_configuredRoot.empty();
+}
+
+std::wstring DefaultCaptureRoot() {
+    wil::unique_cotaskmem_string pictures;
+    if (FAILED(SHGetKnownFolderPath(FOLDERID_Pictures, 0, nullptr, &pictures))) {
+        return {};
+    }
+    std::wstring root = pictures.get();
+    root += L'\\';
+    root += SWEEPCAP_NAME_W;
+    return root;
 }
 
 void SetCaptureRoot(const wchar_t* path) {

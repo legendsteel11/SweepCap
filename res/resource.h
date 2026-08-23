@@ -77,6 +77,12 @@
 #define IDS_MENU_FOLDER_NO_DATE  1046
 #define IDS_MENU_RESTART         1047
 
+// The save landed in the default folder because the configured one was
+// unusable. The text is a format string taking the folder's path: the balloon
+// is the only thing that says where the file actually went.
+#define IDS_ERR_FALLBACK_TITLE   1048
+#define IDS_ERR_SAVE_FALLBACK    1049
+
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030
 #define IDS_GESTURE_CTRL_WIN       1031

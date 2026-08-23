@@ -25,7 +25,8 @@ public:
     void Remove();
 
     // Balloon over the tray icon. Used only to report that a capture could not
-    // be delivered, which is rare enough that it never becomes noise.
+    // be delivered, or that its file was diverted to the default folder, both
+    // rare enough that it never becomes noise.
     //
     // Windows can suppress this: notifications turned off for the application,
     // or focus assist. There is no reliable way to tell that it was swallowed,

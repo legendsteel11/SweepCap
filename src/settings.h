@@ -113,6 +113,11 @@ int DimKeepEighths();
 const std::wstring& CaptureRoot();
 bool CaptureRootIsDefault();
 
+// The folder used when nothing is configured: Pictures\SweepCap. Also the
+// place a capture is diverted to when the configured folder stops working.
+// Empty only when the Pictures folder itself cannot be resolved.
+std::wstring DefaultCaptureRoot();
+
 // Passing nullptr or an empty string restores the default.
 void SetCaptureRoot(const wchar_t* path);
 

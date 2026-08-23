@@ -43,6 +43,8 @@ BEGIN
     IDS_ERR_CLIP_ONLY       "클립보드에 복사하지 못했습니다. 파일로는 저장되었습니다."
     IDS_ERR_DELIVERY_ALL    "저장과 클립보드 복사가 모두 실패했습니다."
     IDS_ERR_CAPTURE_NONE    "캡처 이미지를 만들지 못했습니다."
+    IDS_ERR_FALLBACK_TITLE  "기본 폴더에 저장됨"
+    IDS_ERR_SAVE_FALLBACK   "지정한 저장 폴더를 사용할 수 없어 기본 폴더에 저장했습니다.\n%s"
 
     IDS_GRID_DIVISIONS      "%d x %d 분할"
 
@@ -97,6 +99,8 @@ BEGIN
     IDS_ERR_CLIP_ONLY       "Could not copy to the clipboard. The capture was saved to a file."
     IDS_ERR_DELIVERY_ALL    "Saving to a file and copying to the clipboard both failed."
     IDS_ERR_CAPTURE_NONE    "Could not produce the capture image."
+    IDS_ERR_FALLBACK_TITLE  "Saved to the default folder"
+    IDS_ERR_SAVE_FALLBACK   "The configured save folder could not be used. The capture was saved to the default folder instead.\n%s"
 
     IDS_GRID_DIVISIONS      "%d x %d divisions"
 

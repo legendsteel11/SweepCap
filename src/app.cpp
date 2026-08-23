@@ -501,6 +501,30 @@ void ReportDeliveryFailure(WPARAM failures) {
     g_lastFailureKind = failures;
     g_lastFailureAt = now;
 
+    // A diverted save: the file exists, but in the default folder rather than
+    // the one the user configured. This must never pass silently, and the
+    // balloon says where the file went, because nothing else does. When the
+    // clipboard failed in the same capture, this still wins: both messages
+    // agree the capture survived, and only this one carries the location,
+    // which the user cannot discover on their own.
+    if ((failures & kDeliverySaveFellBack) != 0) {
+        wchar_t title[64];
+        wchar_t format[192];
+        wchar_t text[256];
+        LoadText(IDS_ERR_SAVE_FALLBACK,
+                 L"The configured save folder could not be used. The capture was saved to the "
+                 L"default folder instead.\n%s",
+                 format, ARRAYSIZE(format));
+        const std::wstring where = ShortenPath(settings::DefaultCaptureRoot());
+        if (swprintf_s(text, format, where.c_str()) < 0) {
+            wcscpy_s(text, where.c_str());
+        }
+        g_tray.ShowBalloon(LoadText(IDS_ERR_FALLBACK_TITLE, L"Saved to the default folder",
+                                    title, ARRAYSIZE(title)),
+                           text);
+        return;
+    }
+
     UINT id = IDS_ERR_DELIVERY_ALL;
     if ((failures & kDeliveryCaptureFailed) != 0) {
         id = IDS_ERR_CAPTURE_NONE;
