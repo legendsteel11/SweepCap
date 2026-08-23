@@ -58,11 +58,11 @@ BEGIN
     IDS_ABOUT_GITHUB     "GitHub: <a href=""https://github.com/legendsteel11"">github.com/legendsteel11</a>"
     IDS_ABOUT_THIRDPARTY "이 앱은 Microsoft WIL(MIT 라이선스)을 포함합니다."
 
-    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
-    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
-    IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"
-    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (격자 스냅 +Shift)"
-    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (격자 스냅 +Alt)"
+    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (+Shift: 격자 스냅)"
+    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (+Shift: 격자 스냅)"
+    IDS_GESTURE_ALT_WIN        "Alt+Win (+Shift: 격자 스냅)"
+    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (+Shift: 격자 스냅)"
+    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (+Alt: 격자 스냅)"
 END
 
 // English. LoadString picks the block by the thread UI language, so this is
@@ -110,11 +110,11 @@ BEGIN
     IDS_ABOUT_GITHUB     "GitHub: <a href=""https://github.com/legendsteel11"">github.com/legendsteel11</a>"
     IDS_ABOUT_THIRDPARTY "This application includes Microsoft WIL (MIT License)."
 
-    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (grid snap +Shift)"
-    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (grid snap +Shift)"
-    IDS_GESTURE_ALT_WIN        "Alt+Win (grid snap +Shift)"
-    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (grid snap +Shift)"
-    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (grid snap +Alt)"
+    IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (+Shift: grid snap)"
+    IDS_GESTURE_CTRL_WIN       "Ctrl+Win (+Shift: grid snap)"
+    IDS_GESTURE_ALT_WIN        "Alt+Win (+Shift: grid snap)"
+    IDS_GESTURE_CTRL_ALT_WIN   "Ctrl+Alt+Win (+Shift: grid snap)"
+    IDS_GESTURE_CTRL_SHIFT_WIN "Ctrl+Shift+Win (+Alt: grid snap)"
 END
 
 /////////////////////////////////////////////////////////////////////////////
