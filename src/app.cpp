@@ -634,7 +634,7 @@ void ShowAboutDialog(HWND owner) {
     // The version number stays put between releases while builds change
     // daily, so the commit hash is what actually identifies this binary.
     config.pszMainInstruction =
-        SWEEPCAP_NAME_W L" " SWEEPCAP_VERSION_W L" (" SWEEPCAP_COMMIT_W L")";
+        SWEEPCAP_NAME_W L" v" SWEEPCAP_VERSION_W L" (" SWEEPCAP_COMMIT_W L")";
     config.pszContent = content;
     config.pszFooter =
         LoadText(IDS_ABOUT_THIRDPARTY, L"This application includes Microsoft WIL (MIT License).",

@@ -25,6 +25,9 @@ Release/
 # 배포본 로컬 사본
 releases/
 
+# 작업 기획서. 로컬 전용이며 저장소에 올리지 않는다.
+CLAUDE.md
+
 # 기타
 *.log
 Thumbs.db
