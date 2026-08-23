@@ -14,6 +14,10 @@
 #define SWEEPCAP_VERSION_W  L"0.1.0.0"
 #define SWEEPCAP_VER_COMMA   0,1,0,0
 
+// Public contact, shown in the About box and the version resource.
+#define SWEEPCAP_AUTHOR_EMAIL    "pjh85336@gmail.com"
+#define SWEEPCAP_AUTHOR_EMAIL_W L"pjh85336@gmail.com"
+
 // Unique names for the window class and the single-instance mutex.
 #define SWEEPCAP_WNDCLASS_W L"SweepCap.MessageWindow"
 #define SWEEPCAP_MUTEX_W    L"Local\\SweepCap.SingleInstance"

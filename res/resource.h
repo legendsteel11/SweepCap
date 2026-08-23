@@ -64,9 +64,14 @@
 // About box. The name and version are compile-time macros shared with the
 // version resource, so only the author line and the third-party notice live
 // here.
-#define IDS_MENU_ABOUT        1040
-#define IDS_ABOUT_AUTHOR      1041
-#define IDS_ABOUT_THIRDPARTY  1042
+#define IDS_MENU_ABOUT           1040
+#define IDS_ABOUT_AUTHOR         1041
+#define IDS_ABOUT_THIRDPARTY     1042
+#define IDS_ABOUT_GITHUB         1043
+// The author line again, with the mark that the address is now on the
+// clipboard. The copy button is what swaps one for the other.
+#define IDS_ABOUT_AUTHOR_COPIED  1044
+#define IDS_ABOUT_COPY_EMAIL     1045
 
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030

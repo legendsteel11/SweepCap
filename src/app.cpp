@@ -363,30 +363,122 @@ void ReportDeliveryFailure(WPARAM failures) {
         LoadText(id, L"The capture could not be delivered.", text, ARRAYSIZE(text)));
 }
 
+// Plain text onto the clipboard. The capture path has its own clipboard code,
+// but that one carries bitmaps and runs on the worker thread; this is the
+// two-line text case.
+void CopyTextToClipboard(HWND owner, const wchar_t* text) {
+    if (!OpenClipboard(owner)) {
+        return;
+    }
+    EmptyClipboard();
+    const size_t bytes = (wcslen(text) + 1) * sizeof(wchar_t);
+    HGLOBAL memory = GlobalAlloc(GMEM_MOVEABLE, bytes);
+    if (memory != nullptr) {
+        void* locked = GlobalLock(memory);
+        if (locked != nullptr) {
+            memcpy(locked, text, bytes);
+            GlobalUnlock(memory);
+            // The clipboard owns the memory once SetClipboardData succeeds.
+            if (SetClipboardData(CF_UNICODETEXT, memory) == nullptr) {
+                GlobalFree(memory);
+            }
+        } else {
+            GlobalFree(memory);
+        }
+    }
+    CloseClipboard();
+}
+
+// The copy button sits in the button row next to OK. TaskDialog has no way to
+// put a control beside a line of content, and a DIALOGEX that could would take
+// on theme and dark mode by hand.
+constexpr int kAboutCopyButtonId = 100;
+
+// Content to swap in after the copy button is pressed: the same lines with
+// the author line marked copied.
+struct AboutContent {
+    const wchar_t* copied;
+};
+
+// Handles the copy button and hyperlink clicks; without a handler the links
+// would render but do nothing. Copying goes to the clipboard rather than a
+// mailto link on purpose: PCs without a configured mail client would open
+// nothing, while the clipboard always works.
+HRESULT CALLBACK AboutDialogCallback(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam,
+                                     LONG_PTR refData) {
+    if (msg == TDN_BUTTON_CLICKED && wparam == kAboutCopyButtonId) {
+        CopyTextToClipboard(hwnd, SWEEPCAP_AUTHOR_EMAIL_W);
+        const auto* content = reinterpret_cast<const AboutContent*>(refData);
+        // TDM_SET_ELEMENT_TEXT rather than TDM_UPDATE_ELEMENT_TEXT: the line
+        // grows, and only the former lets the dialog take a new size.
+        SendMessageW(hwnd, TDM_SET_ELEMENT_TEXT, TDE_CONTENT,
+                     reinterpret_cast<LPARAM>(content->copied));
+        return S_FALSE;  // keep the dialog open
+    }
+    if (msg == TDN_HYPERLINK_CLICKED) {
+        ShellExecuteW(nullptr, L"open", reinterpret_cast<const wchar_t*>(lparam), nullptr,
+                      nullptr, SW_SHOWNORMAL);
+    }
+    return S_OK;
+}
+
 // The About box is a task dialog rather than a DIALOGEX: it follows the
-// system theme, DPI and font on its own, and the content is three fixed lines.
+// system theme, DPI and font on its own, and the content is a few fixed lines.
 //
 // The name and version come from the same macros the version resource uses,
 // so the box cannot drift from the binary's metadata.
 void ShowAboutDialog(HWND owner) {
     wchar_t title[64];
     wchar_t author[256];
+    wchar_t authorCopied[256];
+    wchar_t copyLabel[64];
+    wchar_t github[256];
+    wchar_t content[512];
+    wchar_t contentCopied[512];
     wchar_t thirdParty[256];
+
+    LoadText(IDS_ABOUT_AUTHOR, L"Author: " SWEEPCAP_AUTHOR_EMAIL_W, author,
+             ARRAYSIZE(author));
+    LoadText(IDS_ABOUT_AUTHOR_COPIED, L"Author: " SWEEPCAP_AUTHOR_EMAIL_W L" (copied)",
+             authorCopied, ARRAYSIZE(authorCopied));
+    // The GitHub line points at the maker's profile, not this repository: the
+    // profile lists the maker's public tools, so it doubles as the link to
+    // them.
+    LoadText(IDS_ABOUT_GITHUB,
+             L"GitHub: <a href=\"https://github.com/legendsteel11\">github.com/legendsteel11</a>",
+             github, ARRAYSIZE(github));
+    if (swprintf_s(content, L"%s\n%s", author, github) < 0) {
+        wcscpy_s(content, author);
+    }
+    if (swprintf_s(contentCopied, L"%s\n%s", authorCopied, github) < 0) {
+        wcscpy_s(contentCopied, authorCopied);
+    }
+    AboutContent swap{contentCopied};
+
+    const TASKDIALOG_BUTTON copyButton{
+        kAboutCopyButtonId,
+        LoadText(IDS_ABOUT_COPY_EMAIL, L"Copy email address", copyLabel,
+                 ARRAYSIZE(copyLabel))};
 
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof(config);
     config.hwndParent = owner;
     config.hInstance = GetModuleHandleW(nullptr);
-    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_ENABLE_HYPERLINKS;
+    config.pfCallback = AboutDialogCallback;
+    config.lpCallbackData = reinterpret_cast<LONG_PTR>(&swap);
+    config.pButtons = &copyButton;
+    config.cButtons = 1;
     config.dwCommonButtons = TDCBF_OK_BUTTON;
+    // Enter still closes; the copy button is the extra, not the default.
+    config.nDefaultButton = IDOK;
     config.pszWindowTitle = LoadText(IDS_MENU_ABOUT, L"About", title, ARRAYSIZE(title));
     config.pszMainIcon = MAKEINTRESOURCEW(IDI_APPICON);
     // The version number stays put between releases while builds change
     // daily, so the commit hash is what actually identifies this binary.
     config.pszMainInstruction =
         SWEEPCAP_NAME_W L" " SWEEPCAP_VERSION_W L" (" SWEEPCAP_COMMIT_W L")";
-    config.pszContent = LoadText(IDS_ABOUT_AUTHOR, L"Author: pjh85336@gmail.com", author,
-                                 ARRAYSIZE(author));
+    config.pszContent = content;
     config.pszFooter =
         LoadText(IDS_ABOUT_THIRDPARTY, L"This application includes Microsoft WIL (MIT License).",
                  thirdParty, ARRAYSIZE(thirdParty));
