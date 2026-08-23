@@ -10,9 +10,9 @@
 #define SWEEPCAP_NAME        "SweepCap"
 #define SWEEPCAP_NAME_W     L"SweepCap"
 
-#define SWEEPCAP_VERSION     "0.1.0.0"
-#define SWEEPCAP_VERSION_W  L"0.1.0.0"
-#define SWEEPCAP_VER_COMMA   0,1,0,0
+#define SWEEPCAP_VERSION     "1.0.0.0"
+#define SWEEPCAP_VERSION_W  L"1.0.0.0"
+#define SWEEPCAP_VER_COMMA   1,0,0,0
 
 // Public contact, shown in the About box and the version resource.
 #define SWEEPCAP_AUTHOR_EMAIL    "pjh85336@gmail.com"
