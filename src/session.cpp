@@ -289,7 +289,7 @@ void CaptureSession::Tick() {
     }
     snapEnabled_ = held;
     windowShownLast_ = shown;
-    overlay_.SetSelection(CurrentSelection(), shown);
+    overlay_.SetSelection(CurrentSelection(), shown, hook::Current());
 }
 
 void CaptureSession::EndFlash() {
@@ -397,7 +397,7 @@ void CaptureSession::Update() {
     UpdatePickRelease();
     snapEnabled_ = settings::SnapModifierHeld();
     windowShownLast_ = WindowShown();
-    overlay_.SetSelection(CurrentSelection(), windowShownLast_);
+    overlay_.SetSelection(CurrentSelection(), windowShownLast_, hook::Current());
 }
 
 void CaptureSession::Finish(HWND owner) {
@@ -423,7 +423,7 @@ void CaptureSession::Finish(HWND owner) {
     // A drag needs none of this: its rectangle was on screen the whole time.
     const bool flash = windowPick && !WindowShown();
     if (flash) {
-        overlay_.SetSelection(pick_.frame, true);
+        overlay_.SetSelection(pick_.frame, true, hook::Current());
     } else {
         // Take the overlay down first. Cropping reads the frozen frame either
         // way, but clearing the screen sooner is what makes it feel immediate.

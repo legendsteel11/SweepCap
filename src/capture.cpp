@@ -4,6 +4,7 @@
 
 #include "coords.h"
 #include "log.h"
+#include "settings.h"
 
 namespace sc {
 namespace {
@@ -103,37 +104,48 @@ bool FrozenFrame::GrabPixels() {
 
     // Build the darkened copy the overlay lays down outside the selection.
     //
-    // Five eighths of the original brightness: two shifts, two masks and an
-    // add, still with no multiply. Working 64 bits at a time halves the
-    // iteration count, and the per-byte maximum of 0x7F + 0x1F stays under
-    // 0x100 so nothing carries into the neighbouring channel.
+    // Brightness is kept in eighths, assembled from halves, quarters and
+    // eighths so a shift and an add do the work of a multiply. Sixty-four bits
+    // at a time halves the iteration count, and the per-byte maximum of
+    // 0x7F + 0x3F + 0x1F stays under 0x100, so nothing carries into the
+    // neighbouring channel.
     //
-    // Half brightness came first and was too harsh to look at next to the
-    // undimmed selection. Three quarters is the next step if this is still
-    // too dark.
-    void* dimBits = nullptr;
-    wil::unique_hbitmap dimDib{
-        CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &dimBits, nullptr, 0)};
-    if (dimDib && dimBits != nullptr) {
-        const size_t pixelCount = static_cast<size_t>(width) * static_cast<size_t>(height);
-        const auto* src = static_cast<const uint64_t*>(bits);
-        auto* dst = static_cast<uint64_t*>(dimBits);
-        const size_t pairs = pixelCount / 2;
-        for (size_t i = 0; i < pairs; ++i) {
-            dst[i] = (((src[i] >> 1) & 0x7F7F7F7F7F7F7F7Full) +
-                      ((src[i] >> 3) & 0x1F1F1F1F1F1F1F1Full)) |
-                     0xFF000000FF000000ull;
+    // Eight eighths means no dimming, and then there is no copy at all: the
+    // overlay already falls back to the original when this is missing, so
+    // turning it off costs neither the memory nor the time.
+    const int keep = settings::DimKeepEighths();
+    if (keep < 8) {
+        const uint64_t half = (keep & 4) != 0 ? 0x7F7F7F7F7F7F7F7Full : 0;
+        const uint64_t quarter = (keep & 2) != 0 ? 0x3F3F3F3F3F3F3F3Full : 0;
+        const uint64_t eighth = (keep & 1) != 0 ? 0x1F1F1F1F1F1F1F1Full : 0;
+
+        void* dimBits = nullptr;
+        wil::unique_hbitmap dimDib{
+            CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &dimBits, nullptr, 0)};
+        if (dimDib && dimBits != nullptr) {
+            const size_t pixelCount =
+                static_cast<size_t>(width) * static_cast<size_t>(height);
+            const auto* src = static_cast<const uint64_t*>(bits);
+            auto* dst = static_cast<uint64_t*>(dimBits);
+            const size_t pairs = pixelCount / 2;
+            for (size_t i = 0; i < pairs; ++i) {
+                const uint64_t v = src[i];
+                dst[i] = (((v >> 1) & half) + ((v >> 2) & quarter) + ((v >> 3) & eighth)) |
+                         0xFF000000FF000000ull;
+            }
+            if ((pixelCount & 1u) != 0) {
+                const auto* src32 = static_cast<const uint32_t*>(bits);
+                auto* dst32 = static_cast<uint32_t*>(dimBits);
+                const uint32_t v = src32[pixelCount - 1];
+                dst32[pixelCount - 1] = (((v >> 1) & static_cast<uint32_t>(half)) +
+                                         ((v >> 2) & static_cast<uint32_t>(quarter)) +
+                                         ((v >> 3) & static_cast<uint32_t>(eighth))) |
+                                        0xFF000000u;
+            }
+            dimBitmap_ = std::move(dimDib);
+        } else {
+            SC_LOG(L"[캡처] 어둡게 만든 사본 생성 실패 err=%lu", GetLastError());
         }
-        if ((pixelCount & 1u) != 0) {
-            const auto* src32 = static_cast<const uint32_t*>(bits);
-            auto* dst32 = static_cast<uint32_t*>(dimBits);
-            const uint32_t last = src32[pixelCount - 1];
-            dst32[pixelCount - 1] =
-                (((last >> 1) & 0x7F7F7F7Fu) + ((last >> 3) & 0x1F1F1F1Fu)) | 0xFF000000u;
-        }
-        dimBitmap_ = std::move(dimDib);
-    } else {
-        SC_LOG(L"[캡처] 어둡게 만든 사본 생성 실패 err=%lu", GetLastError());
     }
 
     bitmap_ = std::move(dib);

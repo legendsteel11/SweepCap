@@ -37,7 +37,7 @@ public:
     // selection is in virtual desktop coordinates. windowMode tints the border
     // so it is obvious that a whole window is selected rather than a rectangle
     // the user dragged.
-    void SetSelection(const RECT& selection, bool windowMode);
+    void SetSelection(const RECT& selection, bool windowMode, POINT cursor);
     void Hide();
     bool Visible() const { return visible_; }
 
@@ -48,12 +48,14 @@ private:
     void StepFade();
     void InvalidateForSelection(const RECT& before, const RECT& after) const;
     RECT ToClient(const RECT& virtualRect) const;
+    POINT ToClientPoint(POINT virtualPoint) const;
 
     HWND hwnd_ = nullptr;
     const FrozenFrame* frame_ = nullptr;
     RECT selection_{};
     bool visible_ = false;
     bool windowMode_ = false;
+    POINT cursor_{};
     int fadeStep_ = 0;
 
     wil::unique_hfont labelFont_;

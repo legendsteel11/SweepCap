@@ -116,6 +116,29 @@ wil::unique_hmenu BuildGridMenu() {
     return menu;
 }
 
+wil::unique_hmenu BuildDimMenu() {
+    wil::unique_hmenu menu{CreatePopupMenu()};
+    if (!menu) {
+        return {};
+    }
+    // In menu order, matching settings::DimChoices.
+    constexpr UINT kLabels[] = {IDS_DIM_OFF, IDS_DIM_LIGHT, IDS_DIM_NORMAL, IDS_DIM_STRONG};
+    wchar_t label[64];
+    size_t total = 0;
+    settings::DimChoices(&total);
+    if (total > ARRAYSIZE(kLabels)) {
+        total = ARRAYSIZE(kLabels);
+    }
+    for (size_t i = 0; i < total; ++i) {
+        AppendMenuW(menu.get(), MF_STRING, IDM_DIM_FIRST + i,
+                    LoadText(kLabels[i], L"Dim", label, ARRAYSIZE(label)));
+    }
+    const UINT current = IDM_DIM_FIRST + static_cast<UINT>(settings::DimIndex());
+    CheckMenuRadioItem(menu.get(), IDM_DIM_FIRST,
+                       IDM_DIM_FIRST + static_cast<UINT>(total) - 1, current, MF_BYCOMMAND);
+    return menu;
+}
+
 wil::unique_hmenu BuildFolderMenu() {
     wil::unique_hmenu menu{CreatePopupMenu()};
     if (!menu) {
@@ -164,6 +187,8 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
                   LoadText(IDS_MENU_GESTURE, L"Change shortcut", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildGridMenu(),
                   LoadText(IDS_MENU_GRID, L"Capture grid size", text, ARRAYSIZE(text)));
+    AttachSubmenu(menu.get(), BuildDimMenu(),
+                  LoadText(IDS_MENU_DIM, L"Dim outside", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildFolderMenu(),
                   LoadText(IDS_MENU_FOLDER, L"Save folder", text, ARRAYSIZE(text)));
 
@@ -447,6 +472,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             }
             if (id >= IDM_GRID_FIRST && id <= IDM_GRID_LAST) {
                 settings::SetGridIndex(static_cast<int>(id - IDM_GRID_FIRST));
+                return 0;
+            }
+            if (id >= IDM_DIM_FIRST && id <= IDM_DIM_LAST) {
+                settings::SetDimIndex(static_cast<int>(id - IDM_DIM_FIRST));
                 return 0;
             }
             switch (id) {

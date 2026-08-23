@@ -3,6 +3,7 @@
 #include <shlobj.h>
 #include <wil/resource.h>
 
+#include <atomic>
 #include <cstdio>
 
 #include "../res/resource.h"
@@ -35,15 +36,22 @@ constexpr Gesture kGestures[] = {
 // The division entries exist so a capture can be lined up with the same grid
 // the window sizes use, and so a selection can reach the screen edge exactly.
 constexpr GridChoice kGridChoices[] = {
-    {16, 0, 0}, {24, 0, 0}, {32, 0, 0}, {48, 0, 0}, {64, 0, 0},
-    {0, 12, 6}, {0, 24, 12},
+    {16, 0, 0},  {24, 0, 0},   {32, 0, 0},   {48, 0, 0},   {64, 0, 0},
+    {0, 12, 6},  {0, 24, 12},  {0, 48, 24},  {0, 96, 48},
 };
 constexpr int kDefaultGridIndex = 2;
+
+// Brightness kept outside the selection, in eighths. Eight is no dimming.
+constexpr int kDimChoices[] = {8, 6, 5, 4};
+constexpr int kDefaultDimIndex = 2;  // five eighths
 
 constexpr wchar_t kRunKeyPath[] = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 
 int g_gestureIndex = 0;
 int g_gridIndex = kDefaultGridIndex;
+// Read by the worker thread that builds the darkened copy, written only by the
+// message loop. The only value here that crosses threads.
+std::atomic<int> g_dimIndex{kDefaultDimIndex};
 std::wstring g_captureRoot;      // resolved, never empty after Load
 std::wstring g_configuredRoot;   // what the INI holds, empty when default
 std::wstring g_iniPath;
@@ -158,6 +166,18 @@ void Load() {
         }
     }
 
+    int dimIndex = kDefaultDimIndex;
+    if (!g_iniPath.empty()) {
+        const int keep = GetPrivateProfileIntW(L"capture", L"dim", 0, g_iniPath.c_str());
+        for (size_t i = 0; i < ARRAYSIZE(kDimChoices); ++i) {
+            if (kDimChoices[i] == keep) {
+                dimIndex = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+    g_dimIndex.store(dimIndex, std::memory_order_relaxed);
+
     wchar_t folder[MAX_PATH] = L"";
     if (!g_iniPath.empty()) {
         GetPrivateProfileStringW(L"save", L"folder", L"", folder, ARRAYSIZE(folder),
@@ -210,6 +230,30 @@ bool ModifiersHeld() {
 
 bool SnapModifierHeld() {
     return MaskHeld(kGestures[g_gestureIndex].snap);
+}
+
+const int* DimChoices(size_t* count) {
+    if (count != nullptr) {
+        *count = ARRAYSIZE(kDimChoices);
+    }
+    return kDimChoices;
+}
+
+int DimIndex() {
+    return g_dimIndex.load(std::memory_order_relaxed);
+}
+
+int DimKeepEighths() {
+    return kDimChoices[g_dimIndex.load(std::memory_order_relaxed)];
+}
+
+void SetDimIndex(int index) {
+    if (index < 0 || index >= static_cast<int>(ARRAYSIZE(kDimChoices))) {
+        return;
+    }
+    g_dimIndex.store(index, std::memory_order_relaxed);
+    WriteInt(L"capture", L"dim", kDimChoices[index]);
+    SC_LOG(L"[설정] 바깥 밝기 변경 %d/8", kDimChoices[index]);
 }
 
 const GridChoice* GridChoices(size_t* count) {

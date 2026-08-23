@@ -45,6 +45,12 @@ BEGIN
 
     IDS_GRID_DIVISIONS      "%d x %d 분할"
 
+    IDS_MENU_DIM            "바깥 어둡게"
+    IDS_DIM_OFF             "끔"
+    IDS_DIM_LIGHT           "약하게"
+    IDS_DIM_NORMAL          "보통"
+    IDS_DIM_STRONG          "진하게"
+
     IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
     IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
     IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"

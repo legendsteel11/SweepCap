@@ -78,6 +78,20 @@ int GridIndex();
 void SetGridIndex(int index);
 const GridChoice& Grid();
 
+// How much brightness the area outside the selection keeps, in eighths.
+//
+// Eight means no dimming at all, and then no darkened copy is built: the
+// overlay already falls back to the original, so that also saves the copy's
+// memory and the time spent making it.
+//
+// This is the one value read off the UI thread. The darkened copy is built by
+// the worker that grabs the screen, so the value is atomic; everything else
+// here is touched only by the message loop.
+const int* DimChoices(size_t* count);
+int DimIndex();
+void SetDimIndex(int index);
+int DimKeepEighths();
+
 // The folder captures go under, before the per-date subfolder. Never empty:
 // when nothing is configured this resolves to Pictures\SweepCap.
 const std::wstring& CaptureRoot();

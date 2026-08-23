@@ -246,6 +246,14 @@ void Overlay::Hide() {
     ShowWindow(hwnd_, SW_HIDE);
 }
 
+POINT Overlay::ToClientPoint(POINT virtualPoint) const {
+    if (!frame_) {
+        return POINT{};
+    }
+    const RECT& b = frame_->Bounds();
+    return POINT{virtualPoint.x - b.left, virtualPoint.y - b.top};
+}
+
 RECT Overlay::ToClient(const RECT& virtualRect) const {
     if (!frame_) {
         return RECT{};
@@ -261,7 +269,7 @@ void Overlay::InvalidateForSelection(const RECT& before, const RECT& after) cons
     }
     // The border and the size readout extend past the rectangle, so invalidate
     // with room to spare.
-    constexpr int kMargin = 80;
+    constexpr int kMargin = 200;
     const RECT changed[2] = {before, after};
     for (const RECT& r : changed) {
         RECT client = ToClient(r);
@@ -270,7 +278,8 @@ void Overlay::InvalidateForSelection(const RECT& before, const RECT& after) cons
     }
 }
 
-void Overlay::SetSelection(const RECT& selection, bool windowMode) {
+void Overlay::SetSelection(const RECT& selection, bool windowMode, POINT cursor) {
+    cursor_ = cursor;
     if (!visible_ || !hwnd_) {
         return;
     }
@@ -329,17 +338,27 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
             if (GetTextExtentPoint32W(dc, text, textLength, &textSize)) {
                 const LONG boxWidth = textSize.cx + kLabelPaddingX * 2;
                 const LONG boxHeight = textSize.cy + kLabelPaddingY * 2;
-                label = RECT{sel.left, sel.bottom + kLabelGap, sel.left + boxWidth,
-                             sel.bottom + kLabelGap + boxHeight};
+                // The readout follows the cursor rather than sitting at a fixed
+                // corner of the selection. On a large screen the dragged corner
+                // and a fixed corner can be most of a metre apart, and reading
+                // the size then means looking away from the work.
+                //
+                // It goes on the far side of the cursor from the selection, so
+                // it never covers the area being chosen: dragging down-right
+                // puts it below-right, dragging up-left puts it above-left.
+                const POINT cursor = ToClientPoint(cursor_);
+                const LONG midX = (sel.left + sel.right) / 2;
+                const LONG midY = (sel.top + sel.bottom) / 2;
+                const LONG gap = kLabelGap * 2;
+                label.left = cursor.x >= midX ? cursor.x + gap : cursor.x - gap - boxWidth;
+                label.top = cursor.y >= midY ? cursor.y + gap : cursor.y - gap - boxHeight;
+                label.right = label.left + boxWidth;
+                label.bottom = label.top + boxHeight;
 
                 // Fold it back inside when it would leave the screen.
                 const RECT& bounds = frame_->Bounds();
                 const LONG clientBottom = bounds.bottom - bounds.top;
                 const LONG clientRight = bounds.right - bounds.left;
-                if (label.bottom > clientBottom) {
-                    label.top = sel.bottom - kLabelGap - boxHeight;
-                    label.bottom = sel.bottom - kLabelGap;
-                }
                 if (label.right > clientRight) {
                     const LONG shift = label.right - clientRight;
                     label.left -= shift;
@@ -348,6 +367,15 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
                 if (label.left < 0) {
                     label.right -= label.left;
                     label.left = 0;
+                }
+                if (label.bottom > clientBottom) {
+                    const LONG shift = label.bottom - clientBottom;
+                    label.top -= shift;
+                    label.bottom -= shift;
+                }
+                if (label.top < 0) {
+                    label.bottom -= label.top;
+                    label.top = 0;
                 }
                 hasLabel = true;
             }
