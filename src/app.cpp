@@ -918,8 +918,13 @@ int Run(HINSTANCE instance) {
     if (alreadyRunning && wcsstr(GetCommandLineW(), L"--restart") != nullptr) {
         for (int i = 0; i < 50 && alreadyRunning; ++i) {
             Sleep(100);
-            single.reset(CreateMutexW(nullptr, TRUE, SWEEPCAP_MUTEX_W));
-            alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
+            HANDLE retry = CreateMutexW(nullptr, TRUE, SWEEPCAP_MUTEX_W);
+            // Read the error before reset(): closing the previous handle could
+            // overwrite it, and a lost ERROR_ALREADY_EXISTS here would let two
+            // instances run at once.
+            const DWORD error = GetLastError();
+            single.reset(retry);
+            alreadyRunning = (error == ERROR_ALREADY_EXISTS);
         }
         // The old instance held the log file without write sharing, so the
         // open in log::Init lost the race whenever the two overlapped; now
