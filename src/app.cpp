@@ -196,6 +196,117 @@ wil::unique_hmenu BuildFolderMenu() {
     return menu;
 }
 
+// Menu row height.
+//
+// A popup menu has no row-height setting, but the row grows to fit the item's
+// bitmap. A transparent bitmap of the wanted height therefore opens up the
+// rows while the system keeps drawing the text and the theme itself. Rows
+// never shrink: a height below the natural one simply does nothing.
+constexpr int kMenuRowDip = 22;
+
+wil::unique_hbitmap CreateSpacerBitmap(int width, int height, void** outBits) {
+    BITMAPINFO info{};
+    info.bmiHeader.biSize = sizeof(info.bmiHeader);
+    info.bmiHeader.biWidth = width;
+    info.bmiHeader.biHeight = height;
+    info.bmiHeader.biPlanes = 1;
+    info.bmiHeader.biBitCount = 32;
+    info.bmiHeader.biCompression = BI_RGB;
+    void* bits = nullptr;
+    wil::unique_hbitmap bitmap{
+        CreateDIBSection(nullptr, &info, DIB_RGB_COLORS, &bits, nullptr, 0)};
+    if (bitmap && bits != nullptr) {
+        // Alpha zero everywhere, so only the height of the bitmap is visible.
+        memset(bits, 0, static_cast<size_t>(width) * height * 4);
+    }
+    if (outBits != nullptr) {
+        *outBits = bits;
+    }
+    return bitmap;
+}
+
+// The blank spacer for ordinary items.
+wil::unique_hbitmap CreateBlankSpacer(int height) {
+    if (height <= 0) {
+        return {};
+    }
+    return CreateSpacerBitmap(1, height, nullptr);
+}
+
+// The spacer for checked items, with the menu mark drawn in.
+//
+// An item's bitmap takes over the themed check area, so a checked item that
+// got the blank spacer would lose its radio dot or check mark; the first
+// version did exactly that. DrawFrameControl draws the classic glyph in black
+// on white, and turning brightness into coverage lands it antialiased on the
+// otherwise transparent spacer.
+wil::unique_hbitmap CreateMarkSpacer(int height, int markSide, UINT glyph) {
+    if (height <= 0 || markSide <= 0) {
+        return {};
+    }
+    void* bits = nullptr;
+    wil::unique_hbitmap bitmap = CreateSpacerBitmap(markSide, height, &bits);
+    if (!bitmap || bits == nullptr) {
+        return {};
+    }
+    wil::unique_hdc dc{CreateCompatibleDC(nullptr)};
+    if (!dc) {
+        return {};
+    }
+    HGDIOBJ previous = SelectObject(dc.get(), bitmap.get());
+    RECT whole{0, 0, markSide, height};
+    FillRect(dc.get(), &whole, static_cast<HBRUSH>(GetStockObject(WHITE_BRUSH)));
+    RECT mark{0, (height - markSide) / 2, markSide, (height - markSide) / 2 + markSide};
+    DrawFrameControl(dc.get(), &mark, DFC_MENU, glyph);
+    SelectObject(dc.get(), previous);
+    GdiFlush();
+
+    auto* pixel = static_cast<uint32_t*>(bits);
+    const size_t total = static_cast<size_t>(markSide) * height;
+    for (size_t i = 0; i < total; ++i) {
+        // Premultiplied black at the glyph's darkness.
+        const uint32_t alpha = 255u - (pixel[i] & 0xFFu);
+        pixel[i] = alpha << 24;
+    }
+    return bitmap;
+}
+
+struct MenuSpacers {
+    wil::unique_hbitmap blank;
+    wil::unique_hbitmap radio;
+    wil::unique_hbitmap check;
+};
+
+// Separators keep their slim height on purpose; giving them a spacer would
+// blow them up to full rows.
+void ApplyMenuSpacers(HMENU menu, const MenuSpacers& spacers) {
+    const int count = GetMenuItemCount(menu);
+    for (int i = 0; i < count; ++i) {
+        MENUITEMINFOW item{};
+        item.cbSize = sizeof(item);
+        item.fMask = MIIM_FTYPE | MIIM_STATE | MIIM_SUBMENU;
+        if (!GetMenuItemInfoW(menu, static_cast<UINT>(i), TRUE, &item)) {
+            continue;
+        }
+        if (item.hSubMenu != nullptr) {
+            ApplyMenuSpacers(item.hSubMenu, spacers);
+        }
+        if ((item.fType & MFT_SEPARATOR) != 0) {
+            continue;
+        }
+        HBITMAP use = spacers.blank.get();
+        if ((item.fState & MFS_CHECKED) != 0) {
+            use = (item.fType & MFT_RADIOCHECK) != 0 ? spacers.radio.get()
+                                                     : spacers.check.get();
+        }
+        MENUITEMINFOW change{};
+        change.cbSize = sizeof(change);
+        change.fMask = MIIM_BITMAP;
+        change.hbmpItem = use;
+        SetMenuItemInfoW(menu, static_cast<UINT>(i), TRUE, &change);
+    }
+}
+
 // MF_POPUP hands the submenu to the parent, which destroys it in turn, so the
 // wrapper has to let go of it.
 void AttachSubmenu(HMENU parent, wil::unique_hmenu submenu, const wchar_t* label) {
@@ -243,6 +354,26 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_EXIT,
                 LoadText(IDS_MENU_EXIT, L"Exit", text, ARRAYSIZE(text)));
+
+    // Scaled by the monitor the menu opens on; the host window is a hidden
+    // 0 x 0 and says nothing about where the tray is.
+    UINT dpiX = 96;
+    UINT dpiY = 96;
+    HMONITOR monitor = MonitorFromPoint(screenPoint, MONITOR_DEFAULTTONEAREST);
+    if (monitor != nullptr) {
+        GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &dpiX, &dpiY);
+    }
+    // The spacers have to outlive the tracking, which is modal, so this scope
+    // is exactly their lifetime.
+    const int rowHeight = MulDiv(kMenuRowDip, static_cast<int>(dpiY), 96);
+    const int markSide = GetSystemMetricsForDpi(SM_CXMENUCHECK, dpiY);
+    MenuSpacers spacers;
+    spacers.blank = CreateBlankSpacer(rowHeight);
+    spacers.radio = CreateMarkSpacer(rowHeight, markSide, DFCS_MENUBULLET);
+    spacers.check = CreateMarkSpacer(rowHeight, markSide, DFCS_MENUCHECK);
+    if (spacers.blank && spacers.radio && spacers.check) {
+        ApplyMenuSpacers(menu.get(), spacers);
+    }
 
     // Taking the foreground first is what lets a click outside the menu dismiss
     // it; posting WM_NULL afterwards is the other half of that same fix.
