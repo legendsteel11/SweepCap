@@ -78,6 +78,22 @@ int GridIndex();
 void SetGridIndex(int index);
 const GridChoice& Grid();
 
+// Grid that window sizes snap to. Same kinds of value as the capture grid and
+// a separate setting, because the two measure different things.
+//
+// A window size is a fraction of the screen, so half of it has to land on a
+// grid line, which only division guarantees. A capture is aligned to pixels of
+// user interface, so a cell has to stay the same size when the monitor
+// changes, which only a fixed pitch guarantees. Hence the same list of kinds
+// and different defaults.
+//
+// Measured against the work area, not the whole monitor: a window must not go
+// under the taskbar, while a capture may well want it in shot.
+const GridChoice* WindowGridChoices(size_t* count);
+int WindowGridIndex();
+void SetWindowGridIndex(int index);
+const GridChoice& WindowGrid();
+
 // How much brightness the area outside the selection keeps, in eighths.
 //
 // Eight means no dimming at all, and then no darkened copy is built: the

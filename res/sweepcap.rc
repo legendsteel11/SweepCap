@@ -46,6 +46,7 @@ BEGIN
     IDS_GRID_DIVISIONS      "%d x %d 분할"
 
     IDS_MENU_DIM            "바깥 어둡게"
+    IDS_MENU_WINDOW_GRID    "창 격자"
     IDS_DIM_OFF             "끔"
     IDS_DIM_LIGHT           "약하게"
     IDS_DIM_NORMAL          "보통"

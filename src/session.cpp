@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "config.h"
+#include "grid.h"
 #include "hook.h"
 #include "log.h"
 #include "output.h"
@@ -47,61 +48,6 @@ private:
 
 RECT MakeRect(POINT a, POINT b) {
     return RECT{std::min(a.x, b.x), std::min(a.y, b.y), std::max(a.x, b.x), std::max(a.y, b.y)};
-}
-
-// One axis of the grid: where the lines fall along a monitor's width or height.
-//
-// A pixel pitch and a division count are the same idea measured differently, so
-// both reduce to "which line is number i, and which number is nearest to this
-// coordinate". Division uses round(i * size / n) rather than i * (size / n),
-// because the accumulated error of the latter leaves the last line short of the
-// screen edge, which is the one thing division exists to get right.
-//
-// Lines continue past the monitor in both directions, at the same spacing, so a
-// selection dragged onto the next screen keeps snapping.
-class GridAxis {
-public:
-    GridAxis(LONG start, LONG size, int px, int divisions)
-        : start_(start),
-          size_(size > 0 ? size : 1),
-          px_(px),
-          divisions_(divisions > 0 ? divisions : 1) {}
-
-    LONG Line(long long index) const {
-        if (px_ > 0) {
-            return start_ + static_cast<LONG>(index * px_);
-        }
-        return start_ + static_cast<LONG>(std::llround(static_cast<double>(index) *
-                                                       size_ / divisions_));
-    }
-
-    long long NearestIndex(LONG value) const {
-        return std::llround(Position(value));
-    }
-
-    long long IndexBelow(LONG value) const {
-        return static_cast<long long>(std::floor(Position(value)));
-    }
-
-private:
-    // The coordinate expressed in grid lines, which need not be a whole number.
-    double Position(LONG value) const {
-        const double offset = static_cast<double>(value - start_);
-        return px_ > 0 ? offset / px_ : offset * divisions_ / size_;
-    }
-
-    LONG start_;
-    LONG size_;
-    int px_;
-    int divisions_;
-};
-
-GridAxis HorizontalAxis(const RECT& area, const settings::GridChoice& grid) {
-    return GridAxis(area.left, area.right - area.left, grid.px, grid.cols);
-}
-
-GridAxis VerticalAxis(const RECT& area, const settings::GridChoice& grid) {
-    return GridAxis(area.top, area.bottom - area.top, grid.px, grid.rows);
 }
 
 // Pushes a collapsed pair of grid lines apart by one cell.

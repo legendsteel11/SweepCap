@@ -18,6 +18,7 @@
 #include "session.h"
 #include "settings.h"
 #include "tray.h"
+#include "winsnap.h"
 
 namespace sc {
 namespace {
@@ -82,22 +83,23 @@ wil::unique_hmenu BuildGestureMenu() {
     return menu;
 }
 
-wil::unique_hmenu BuildGridMenu() {
+// Both grid menus are built the same way; only the list and the command range
+// differ. Divisions and pixel pitches share one radio list, so the value says
+// which kind it is and there is no mode to choose first.
+wil::unique_hmenu BuildGridMenuFrom(const settings::GridChoice* choices, size_t total,
+                                    int selected, UINT firstId) {
     wil::unique_hmenu menu{CreatePopupMenu()};
-    if (!menu) {
+    if (!menu || choices == nullptr || total == 0) {
         return {};
     }
     wchar_t format[64];
     LoadText(IDS_GRID_DIVISIONS, L"%d x %d divisions", format, ARRAYSIZE(format));
 
-    size_t total = 0;
-    const settings::GridChoice* choices = settings::GridChoices(&total);
     bool separated = false;
+    const bool divisionsFirst = choices[0].ByDivision();
     for (size_t i = 0; i < total; ++i) {
-        // Both kinds share one radio list, so the value carries the mode and
-        // there is nothing to choose before choosing a value. A separator marks
-        // where one kind ends and the other begins.
-        if (choices[i].ByDivision() && !separated) {
+        // A separator marks where one kind ends and the other begins.
+        if (choices[i].ByDivision() != divisionsFirst && !separated) {
             AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
             separated = true;
         }
@@ -108,12 +110,23 @@ wil::unique_hmenu BuildGridMenu() {
         if (written < 0) {
             continue;
         }
-        AppendMenuW(menu.get(), MF_STRING, IDM_GRID_FIRST + i, label);
+        AppendMenuW(menu.get(), MF_STRING, firstId + i, label);
     }
-    const UINT current = IDM_GRID_FIRST + static_cast<UINT>(settings::GridIndex());
-    CheckMenuRadioItem(menu.get(), IDM_GRID_FIRST,
-                       IDM_GRID_FIRST + static_cast<UINT>(total) - 1, current, MF_BYCOMMAND);
+    CheckMenuRadioItem(menu.get(), firstId, firstId + static_cast<UINT>(total) - 1,
+                       firstId + static_cast<UINT>(selected), MF_BYCOMMAND);
     return menu;
+}
+
+wil::unique_hmenu BuildGridMenu() {
+    size_t total = 0;
+    const settings::GridChoice* choices = settings::GridChoices(&total);
+    return BuildGridMenuFrom(choices, total, settings::GridIndex(), IDM_GRID_FIRST);
+}
+
+wil::unique_hmenu BuildWindowGridMenu() {
+    size_t total = 0;
+    const settings::GridChoice* choices = settings::WindowGridChoices(&total);
+    return BuildGridMenuFrom(choices, total, settings::WindowGridIndex(), IDM_WGRID_FIRST);
 }
 
 wil::unique_hmenu BuildDimMenu() {
@@ -187,6 +200,8 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
                   LoadText(IDS_MENU_GESTURE, L"Change shortcut", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildGridMenu(),
                   LoadText(IDS_MENU_GRID, L"Capture grid size", text, ARRAYSIZE(text)));
+    AttachSubmenu(menu.get(), BuildWindowGridMenu(),
+                  LoadText(IDS_MENU_WINDOW_GRID, L"Window grid", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildDimMenu(),
                   LoadText(IDS_MENU_DIM, L"Dim outside", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildFolderMenu(),
@@ -367,15 +382,22 @@ void PollModifiers(HWND hwnd) {
     const ULONGLONG now = GetTickCount64();
     const bool held = settings::ModifiersHeld();
 
+    // Nothing is pre-grabbed during a window drag. The mouse button belongs to
+    // that drag, so no capture can start, and window snapping asks for the
+    // modifier to be held for the length of the drag: refreshing a full-screen
+    // grab every 1.5 s through it costs 65 ms of a core and 32 MB of traffic
+    // each time on a 4K screen, for a frame that will never be used.
+    const bool draggingWindow = winsnap::WindowDragActive();
+
     if (held != g_modifiersHeld) {
         g_modifiersHeld = held;
         g_lastPrewarm = now;
-        if (held) {
+        if (held && !draggingWindow) {
             g_session.Prewarm();
-        } else {
+        } else if (!held) {
             g_session.DropPrewarm();
         }
-    } else if (held && now - g_lastPrewarm >= kPrewarmRefreshMs) {
+    } else if (held && !draggingWindow && now - g_lastPrewarm >= kPrewarmRefreshMs) {
         g_lastPrewarm = now;
         g_session.Prewarm();
     }
@@ -474,6 +496,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 settings::SetGridIndex(static_cast<int>(id - IDM_GRID_FIRST));
                 return 0;
             }
+            if (id >= IDM_WGRID_FIRST && id <= IDM_WGRID_LAST) {
+                settings::SetWindowGridIndex(static_cast<int>(id - IDM_WGRID_FIRST));
+                return 0;
+            }
             if (id >= IDM_DIM_FIRST && id <= IDM_DIM_LAST) {
                 settings::SetDimIndex(static_cast<int>(id - IDM_DIM_FIRST));
                 return 0;
@@ -520,6 +546,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         case WM_DESTROY:
             g_session.Cancel(L"종료");
             hook::Remove();
+            winsnap::Remove();
             g_session.Shutdown();
             g_tray.Remove();
             PostQuitMessage(0);
@@ -629,6 +656,10 @@ int Run(HINSTANCE instance) {
                              message, ARRAYSIZE(message)),
                     SWEEPCAP_NAME_W, MB_ICONWARNING | MB_OK);
     }
+
+    // Window snapping is independent of the mouse hook: it runs off window
+    // events, so losing one does not take the other with it.
+    winsnap::Install();
 
     SC_LOG(L"트레이 상주 시작");
     // Baseline to compare every later reading against.

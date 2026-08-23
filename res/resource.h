@@ -19,6 +19,8 @@
 #define IDM_GRID_LAST     40139
 #define IDM_DIM_FIRST     40140
 #define IDM_DIM_LAST      40159
+#define IDM_WGRID_FIRST   40160
+#define IDM_WGRID_LAST    40179
 
 // User-visible strings.
 //
@@ -58,6 +60,7 @@
 #define IDS_DIM_NORMAL        1028
 #define IDS_DIM_STRONG        1029
 #define IDS_MENU_DIM          1036
+#define IDS_MENU_WINDOW_GRID  1037
 
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030

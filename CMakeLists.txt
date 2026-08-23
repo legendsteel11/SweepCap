@@ -46,6 +46,7 @@ add_executable(sweepcap WIN32
     src/settings.cpp
     src/tray.cpp
     src/windowpick.cpp
+    src/winsnap.cpp
     res/sweepcap.rc
 )
 

@@ -41,6 +41,14 @@ constexpr GridChoice kGridChoices[] = {
 };
 constexpr int kDefaultGridIndex = 2;
 
+// Divisions first here, the reverse of the capture list, because division is
+// what a window size wants: 12 across divides by 2, 3, 4 and 6, so a half, a
+// third, a quarter and two thirds all land on a line.
+constexpr GridChoice kWindowGridChoices[] = {
+    {0, 12, 6}, {0, 24, 12}, {0, 48, 24}, {40, 0, 0}, {80, 0, 0},
+};
+constexpr int kDefaultWindowGridIndex = 0;
+
 // Brightness kept outside the selection, in eighths. Eight is no dimming.
 constexpr int kDimChoices[] = {8, 6, 5, 4};
 constexpr int kDefaultDimIndex = 2;  // five eighths
@@ -49,6 +57,7 @@ constexpr wchar_t kRunKeyPath[] = L"Software\\Microsoft\\Windows\\CurrentVersion
 
 int g_gestureIndex = 0;
 int g_gridIndex = kDefaultGridIndex;
+int g_windowGridIndex = kDefaultWindowGridIndex;
 // Read by the worker thread that builds the darkened copy, written only by the
 // message loop. The only value here that crosses threads.
 std::atomic<int> g_dimIndex{kDefaultDimIndex};
@@ -166,6 +175,20 @@ void Load() {
         }
     }
 
+    g_windowGridIndex = kDefaultWindowGridIndex;
+    if (!g_iniPath.empty()) {
+        const int px = GetPrivateProfileIntW(L"window", L"grid", 0, g_iniPath.c_str());
+        const int cols = GetPrivateProfileIntW(L"window", L"gridcols", 0, g_iniPath.c_str());
+        const int rows = GetPrivateProfileIntW(L"window", L"gridrows", 0, g_iniPath.c_str());
+        for (size_t i = 0; i < ARRAYSIZE(kWindowGridChoices); ++i) {
+            const GridChoice& choice = kWindowGridChoices[i];
+            if (choice.px == px && choice.cols == cols && choice.rows == rows) {
+                g_windowGridIndex = static_cast<int>(i);
+                break;
+            }
+        }
+    }
+
     int dimIndex = kDefaultDimIndex;
     if (!g_iniPath.empty()) {
         const int keep = GetPrivateProfileIntW(L"capture", L"dim", 0, g_iniPath.c_str());
@@ -230,6 +253,37 @@ bool ModifiersHeld() {
 
 bool SnapModifierHeld() {
     return MaskHeld(kGestures[g_gestureIndex].snap);
+}
+
+const GridChoice* WindowGridChoices(size_t* count) {
+    if (count != nullptr) {
+        *count = ARRAYSIZE(kWindowGridChoices);
+    }
+    return kWindowGridChoices;
+}
+
+int WindowGridIndex() {
+    return g_windowGridIndex;
+}
+
+const GridChoice& WindowGrid() {
+    return kWindowGridChoices[g_windowGridIndex];
+}
+
+void SetWindowGridIndex(int index) {
+    if (index < 0 || index >= static_cast<int>(ARRAYSIZE(kWindowGridChoices))) {
+        return;
+    }
+    g_windowGridIndex = index;
+    const GridChoice& choice = kWindowGridChoices[index];
+    WriteInt(L"window", L"grid", choice.px);
+    WriteInt(L"window", L"gridcols", choice.cols);
+    WriteInt(L"window", L"gridrows", choice.rows);
+    if (choice.ByDivision()) {
+        SC_LOG(L"[설정] 창 격자 변경 %d x %d 분할", choice.cols, choice.rows);
+    } else {
+        SC_LOG(L"[설정] 창 격자 변경 %dpx", choice.px);
+    }
 }
 
 const int* DimChoices(size_t* count) {
