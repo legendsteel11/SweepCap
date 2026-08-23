@@ -29,7 +29,7 @@ BEGIN
 
     IDS_MENU_OPEN_FOLDER    "캡처 폴더 열기"
     IDS_MENU_GESTURE        "단축키 변경"
-    IDS_MENU_GRID           "캡처 격자 크기"
+    IDS_MENU_GRID           "캡처 격자"
     IDS_MENU_FOLDER         "저장 폴더"
     IDS_MENU_FOLDER_CHANGE  "변경..."
     IDS_MENU_FOLDER_DEFAULT "기본 저장 폴더로 복원"

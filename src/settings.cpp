@@ -42,12 +42,19 @@ constexpr GridChoice kGridChoices[] = {
 constexpr int kDefaultGridIndex = 2;
 
 // Divisions first here, the reverse of the capture list, because division is
-// what a window size wants: 12 across divides by 2, 3, 4 and 6, so a half, a
-// third, a quarter and two thirds all land on a line.
+// what a window size wants: a half, a third, a quarter and two thirds all have
+// to land on a line, which needs a count divisible by 2, 3, 4 and 6.
+//
+// The default is 48 across rather than the 12 first chosen. Twelve satisfies
+// the divisibility just as well but leaves cells of 320 by 360 on a 4K screen,
+// which is far too coarse to size a window with: the first thing anyone did
+// was go looking for something finer. Every count here divides the same way,
+// so a finer default gives up nothing.
 constexpr GridChoice kWindowGridChoices[] = {
-    {0, 12, 6}, {0, 24, 12}, {0, 48, 24}, {40, 0, 0}, {80, 0, 0},
+    {0, 12, 6},  {0, 24, 12}, {0, 48, 24}, {0, 96, 48},
+    {40, 0, 0},  {80, 0, 0},
 };
-constexpr int kDefaultWindowGridIndex = 0;
+constexpr int kDefaultWindowGridIndex = 2;  // 48 x 24
 
 // Brightness kept outside the selection, in eighths. Eight is no dimming.
 constexpr int kDimChoices[] = {8, 6, 5, 4};

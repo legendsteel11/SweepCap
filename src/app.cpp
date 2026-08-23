@@ -83,6 +83,36 @@ wil::unique_hmenu BuildGestureMenu() {
     return menu;
 }
 
+// One grid value as text: "32 px" or "12 x 6 분할".
+const wchar_t* GridLabel(const settings::GridChoice& grid, wchar_t* buffer, int count) {
+    if (grid.ByDivision()) {
+        wchar_t format[64];
+        LoadText(IDS_GRID_DIVISIONS, L"%d x %d divisions", format, ARRAYSIZE(format));
+        if (swprintf_s(buffer, static_cast<size_t>(count), format, grid.cols, grid.rows) < 0) {
+            buffer[0] = L'\0';
+        }
+    } else if (swprintf_s(buffer, static_cast<size_t>(count), L"%d px", grid.px) < 0) {
+        buffer[0] = L'\0';
+    }
+    return buffer;
+}
+
+// There are two grids, and which one a submenu belongs to is not obvious from
+// its name alone when both are shut. Putting the current value in the title
+// means the pair can be read without opening either, which is how the wrong
+// one got changed.
+const wchar_t* GridTitle(UINT titleId, const wchar_t* fallback,
+                         const settings::GridChoice& grid, wchar_t* buffer, int count) {
+    wchar_t name[64];
+    wchar_t value[64];
+    LoadText(titleId, fallback, name, ARRAYSIZE(name));
+    GridLabel(grid, value, ARRAYSIZE(value));
+    if (swprintf_s(buffer, static_cast<size_t>(count), L"%s: %s", name, value) < 0) {
+        wcscpy_s(buffer, static_cast<size_t>(count), name);
+    }
+    return buffer;
+}
+
 // Both grid menus are built the same way; only the list and the command range
 // differ. Divisions and pixel pitches share one radio list, so the value says
 // which kind it is and there is no mode to choose first.
@@ -92,9 +122,6 @@ wil::unique_hmenu BuildGridMenuFrom(const settings::GridChoice* choices, size_t 
     if (!menu || choices == nullptr || total == 0) {
         return {};
     }
-    wchar_t format[64];
-    LoadText(IDS_GRID_DIVISIONS, L"%d x %d divisions", format, ARRAYSIZE(format));
-
     bool separated = false;
     const bool divisionsFirst = choices[0].ByDivision();
     for (size_t i = 0; i < total; ++i) {
@@ -104,13 +131,8 @@ wil::unique_hmenu BuildGridMenuFrom(const settings::GridChoice* choices, size_t 
             separated = true;
         }
         wchar_t label[64];
-        const int written = choices[i].ByDivision()
-                                ? swprintf_s(label, format, choices[i].cols, choices[i].rows)
-                                : swprintf_s(label, L"%d px", choices[i].px);
-        if (written < 0) {
-            continue;
-        }
-        AppendMenuW(menu.get(), MF_STRING, firstId + i, label);
+        AppendMenuW(menu.get(), MF_STRING, firstId + i,
+                    GridLabel(choices[i], label, ARRAYSIZE(label)));
     }
     CheckMenuRadioItem(menu.get(), firstId, firstId + static_cast<UINT>(total) - 1,
                        firstId + static_cast<UINT>(selected), MF_BYCOMMAND);
@@ -199,9 +221,11 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     AttachSubmenu(menu.get(), BuildGestureMenu(),
                   LoadText(IDS_MENU_GESTURE, L"Change shortcut", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildGridMenu(),
-                  LoadText(IDS_MENU_GRID, L"Capture grid size", text, ARRAYSIZE(text)));
+                  GridTitle(IDS_MENU_GRID, L"Capture grid", settings::Grid(), text,
+                            ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildWindowGridMenu(),
-                  LoadText(IDS_MENU_WINDOW_GRID, L"Window grid", text, ARRAYSIZE(text)));
+                  GridTitle(IDS_MENU_WINDOW_GRID, L"Window grid", settings::WindowGrid(),
+                            text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildDimMenu(),
                   LoadText(IDS_MENU_DIM, L"Dim outside", text, ARRAYSIZE(text)));
     AttachSubmenu(menu.get(), BuildFolderMenu(),
