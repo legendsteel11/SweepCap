@@ -5,7 +5,6 @@
 
 // Tray menu commands
 #define IDM_EXIT           40001
-#define IDM_DUMP_GEOMETRY  40002
 #define IDM_OPEN_FOLDER    40003
 #define IDM_FOLDER_CHANGE  40004
 #define IDM_FOLDER_DEFAULT 40005
@@ -29,7 +28,6 @@
 // than touching the source.
 #define IDS_TRAY_TIP       1001
 #define IDS_MENU_EXIT      1002
-#define IDS_MENU_DUMP      1003
 #define IDS_ERR_TRAY       1004
 #define IDS_ERR_HOOK       1005
 

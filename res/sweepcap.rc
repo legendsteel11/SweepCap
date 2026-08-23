@@ -23,7 +23,6 @@ STRINGTABLE
 BEGIN
     IDS_TRAY_TIP   SWEEPCAP_NAME
     IDS_MENU_EXIT  "종료"
-    IDS_MENU_DUMP  "좌표 로그 남기기"
     IDS_ERR_TRAY   "트레이 아이콘을 등록하지 못했습니다."
     IDS_ERR_HOOK   "마우스 훅을 설치하지 못했습니다.\n영역 캡처가 동작하지 않습니다."
 

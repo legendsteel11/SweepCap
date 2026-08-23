@@ -63,8 +63,6 @@ void Shutdown() {
     g_initialized = false;
 }
 
-const wchar_t* FilePath() { return g_path; }
-
 void WriteResourceUsage(const wchar_t* tag) {
     const HANDLE self = GetCurrentProcess();
     PROCESS_MEMORY_COUNTERS memory{};

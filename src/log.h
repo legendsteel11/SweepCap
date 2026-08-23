@@ -22,7 +22,6 @@ namespace sc::log {
 void Init();
 void Shutdown();
 void Write(const wchar_t* fmt, ...);
-const wchar_t* FilePath();
 
 // GDI and USER object counts, handle count and working set, written with the
 // given tag.

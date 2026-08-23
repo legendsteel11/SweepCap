@@ -236,12 +236,6 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
                 IDM_RUN_AT_STARTUP,
                 LoadText(IDS_MENU_STARTUP, L"Run at startup", text, ARRAYSIZE(text)));
 
-#if defined(_DEBUG)
-    AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(menu.get(), MF_STRING, IDM_DUMP_GEOMETRY,
-                LoadText(IDS_MENU_DUMP, L"Write coordinate log", text, ARRAYSIZE(text)));
-#endif
-
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_EXIT,
                 LoadText(IDS_MENU_EXIT, L"Exit", text, ARRAYSIZE(text)));
@@ -376,14 +370,6 @@ void ToggleRunAtStartup(HWND owner) {
                 LoadText(IDS_ERR_STARTUP, L"Could not change the startup entry.", text,
                          ARRAYSIZE(text)),
                 SWEEPCAP_NAME_W, MB_OK | MB_ICONWARNING);
-}
-
-void DumpGeometryAndOpenLog() {
-    LogDesktopGeometry(L"트레이 메뉴 요청");
-    const wchar_t* path = log::FilePath();
-    if (path != nullptr && path[0] != L'\0') {
-        ShellExecuteW(nullptr, L"open", path, nullptr, nullptr, SW_SHOWNORMAL);
-    }
 }
 
 // Modifier watch.
@@ -544,11 +530,6 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 case IDM_RUN_AT_STARTUP:
                     ToggleRunAtStartup(hwnd);
                     return 0;
-#if defined(_DEBUG)
-                case IDM_DUMP_GEOMETRY:
-                    DumpGeometryAndOpenLog();
-                    return 0;
-#endif
                 default:
                     break;
             }
