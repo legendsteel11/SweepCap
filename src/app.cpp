@@ -475,6 +475,10 @@ void ChangeCaptureFolder(HWND owner) {
 // A different failure reports immediately, so a new problem is never hidden
 // behind an old one.
 constexpr ULONGLONG kFailureRepeatMs = 30000;
+// A different failure reports without waiting out the 30 seconds, but never
+// within this gap of the last balloon: a burst of captures against a broken
+// target would otherwise stack balloons faster than anyone reads them.
+constexpr ULONGLONG kBalloonGapMs = 5000;
 ULONGLONG g_lastFailureAt = 0;
 WPARAM g_lastFailureKind = 0;
 
@@ -484,6 +488,13 @@ void ReportDeliveryFailure(WPARAM failures) {
     const ULONGLONG now = GetTickCount64();
     if (failures == g_lastFailureKind && now - g_lastFailureAt < kFailureRepeatMs) {
         SC_LOG(L"[notify] same failure %llu ms after the last; balloon skipped.",
+               now - g_lastFailureAt);
+        return;
+    }
+    if (now - g_lastFailureAt < kBalloonGapMs) {
+        // Not recorded as shown: once the gap has passed, the next failure of
+        // this kind still reports.
+        SC_LOG(L"[notify] balloon %llu ms after the last; skipped for the gap.",
                now - g_lastFailureAt);
         return;
     }
