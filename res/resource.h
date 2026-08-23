@@ -11,6 +11,7 @@
 #define IDM_RUN_AT_STARTUP 40006
 #define IDM_ABOUT          40007
 #define IDM_FOLDER_NO_DATE 40008
+#define IDM_RESTART        40009
 
 // Command ranges for the radio submenus. The item id carries the index, so
 // handling a click is one subtraction and no lookup table.
@@ -74,6 +75,7 @@
 #define IDS_ABOUT_AUTHOR_COPIED  1044
 #define IDS_ABOUT_COPY_EMAIL     1045
 #define IDS_MENU_FOLDER_NO_DATE  1046
+#define IDS_MENU_RESTART         1047
 
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030

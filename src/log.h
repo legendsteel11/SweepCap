@@ -19,6 +19,11 @@ namespace sc::log {
 
 void Init();
 void Shutdown();
+
+// Second chance for the file half of Init. During a restart the old instance
+// still holds the log without write sharing, so the new instance's Init can
+// lose the race and leave it silent; call this once the old instance is gone.
+void Reopen();
 void Write(const wchar_t* fmt, ...);
 
 // GDI and USER object counts, handle count and working set, written with the

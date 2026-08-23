@@ -57,6 +57,21 @@ void Init() {
     WriteFile(g_file.get(), kBom, sizeof(kBom), &written, nullptr);
 }
 
+void Reopen() {
+    std::lock_guard lock(g_mutex);
+    if (!g_initialized || g_file || g_path[0] == L'\0') {
+        return;
+    }
+    g_file.reset(CreateFileW(g_path, GENERIC_WRITE, FILE_SHARE_READ, nullptr,
+                             CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+    if (!g_file) {
+        return;
+    }
+    static constexpr unsigned char kBom[] = {0xEF, 0xBB, 0xBF};
+    DWORD written = 0;
+    WriteFile(g_file.get(), kBom, sizeof(kBom), &written, nullptr);
+}
+
 void Shutdown() {
     std::lock_guard lock(g_mutex);
     g_file.reset();

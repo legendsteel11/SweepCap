@@ -361,6 +361,8 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
                 LoadText(IDS_MENU_ABOUT, L"About", text, ARRAYSIZE(text)));
 
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(menu.get(), MF_STRING, IDM_RESTART,
+                LoadText(IDS_MENU_RESTART, L"Restart", text, ARRAYSIZE(text)));
     AppendMenuW(menu.get(), MF_STRING, IDM_EXIT,
                 LoadText(IDS_MENU_EXIT, L"Exit", text, ARRAYSIZE(text)));
 
@@ -632,6 +634,35 @@ void ShowAboutDialog(HWND owner) {
     TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
 }
 
+// Launches a fresh instance and shuts this one down. The tray's escape hatch:
+// whatever state the hooks or the session have got into, a restart clears it
+// without hunting for the process.
+//
+// The new instance starts while this one is still shutting down, so it is
+// launched with --restart, which makes its single-instance check wait for the
+// mutex instead of giving up.
+void RestartApplication(HWND hwnd) {
+    wchar_t path[MAX_PATH];
+    if (GetModuleFileNameW(nullptr, path, ARRAYSIZE(path)) == 0) {
+        SC_LOG(L"[restart] GetModuleFileName failed err=%lu", GetLastError());
+        return;
+    }
+    wchar_t command[MAX_PATH + 16];
+    if (swprintf_s(command, L"\"%s\" --restart", path) < 0) {
+        return;
+    }
+    STARTUPINFOW startup{};
+    startup.cb = sizeof(startup);
+    wil::unique_process_information process;
+    if (!CreateProcessW(path, command, nullptr, nullptr, FALSE, 0, nullptr, nullptr,
+                        &startup, &process)) {
+        SC_LOG(L"[restart] CreateProcess failed err=%lu", GetLastError());
+        return;
+    }
+    SC_LOG(L"[restart] new instance launched; shutting down");
+    DestroyWindow(hwnd);
+}
+
 void ToggleRunAtStartup(HWND owner) {
     const bool next = !settings::RunAtStartup();
     if (settings::SetRunAtStartup(next)) {
@@ -809,6 +840,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 case IDM_ABOUT:
                     ShowAboutDialog(hwnd);
                     return 0;
+                case IDM_RESTART:
+                    RestartApplication(hwnd);
+                    return 0;
                 default:
                     break;
             }
@@ -873,10 +907,29 @@ HWND CreateHostWindow(HINSTANCE instance) {
 int Run(HINSTANCE instance) {
     // Single instance. A second launch withdraws quietly.
     wil::unique_mutex_nothrow single{CreateMutexW(nullptr, TRUE, SWEEPCAP_MUTEX_W)};
-    const bool alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
+    bool alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
 
     log::Init();
     SC_LOG(L"%s %s (%s) starting", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W, SWEEPCAP_COMMIT_W);
+
+    // A restart takes over from an instance that is still shutting down, so
+    // the check is retried for a few seconds instead of giving up on the
+    // first try.
+    if (alreadyRunning && wcsstr(GetCommandLineW(), L"--restart") != nullptr) {
+        for (int i = 0; i < 50 && alreadyRunning; ++i) {
+            Sleep(100);
+            single.reset(CreateMutexW(nullptr, TRUE, SWEEPCAP_MUTEX_W));
+            alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
+        }
+        // The old instance held the log file without write sharing, so the
+        // open in log::Init lost the race whenever the two overlapped; now
+        // that the old instance is gone the file can be taken over too.
+        if (!alreadyRunning) {
+            log::Reopen();
+        }
+        SC_LOG(L"[restart] previous instance %s",
+               alreadyRunning ? L"still running; giving up" : L"gone; taking over");
+    }
 
     if (alreadyRunning) {
         SC_LOG(L"already running; exiting.");
