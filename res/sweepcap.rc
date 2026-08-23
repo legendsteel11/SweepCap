@@ -51,6 +51,10 @@ BEGIN
     IDS_DIM_NORMAL          "보통"
     IDS_DIM_STRONG          "진하게"
 
+    IDS_MENU_ABOUT       "앱 정보"
+    IDS_ABOUT_AUTHOR     "제작자: pjh85336@gmail.com"
+    IDS_ABOUT_THIRDPARTY "이 앱은 Microsoft WIL(MIT 라이선스)을 포함합니다."
+
     IDS_GESTURE_CTRL_ALT       "Ctrl+Alt (격자 스냅 +Shift)"
     IDS_GESTURE_CTRL_WIN       "Ctrl+Win (격자 스냅 +Shift)"
     IDS_GESTURE_ALT_WIN        "Alt+Win (격자 스냅 +Shift)"
@@ -79,6 +83,7 @@ BEGIN
         BEGIN
             VALUE "FileDescription",  SWEEPCAP_NAME
             VALUE "FileVersion",      SWEEPCAP_VERSION
+            VALUE "LegalCopyright",   "Copyright (c) 2026 pjh85336@gmail.com"
             VALUE "InternalName",     SWEEPCAP_NAME
             VALUE "OriginalFilename", SWEEPCAP_NAME ".exe"
             VALUE "ProductName",      SWEEPCAP_NAME

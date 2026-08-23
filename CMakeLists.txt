@@ -52,6 +52,19 @@ add_executable(sweepcap WIN32
 
 set_target_properties(sweepcap PROPERTIES OUTPUT_NAME "SweepCap")
 
+# The commit hash header is regenerated on every build; the generator only
+# rewrites the file when the hash actually changed, so this does not force a
+# recompile each time.
+add_custom_target(sweepcap_buildinfo
+    COMMAND ${CMAKE_COMMAND}
+            -DOUT=${CMAKE_BINARY_DIR}/generated/build_info.h
+            -DSRC_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/tools/gen_build_info.cmake
+    BYPRODUCTS ${CMAKE_BINARY_DIR}/generated/build_info.h
+    COMMENT "Refreshing build_info.h"
+)
+add_dependencies(sweepcap sweepcap_buildinfo)
+
 # The resource script pulls in files the build system cannot see by reading it,
 # so replacing the icon left the old one compiled in and the build reported
 # nothing to do.
@@ -64,6 +77,7 @@ target_compile_features(sweepcap PRIVATE cxx_std_20)
 target_include_directories(sweepcap PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/src
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party
+    ${CMAKE_BINARY_DIR}/generated
 )
 
 target_compile_definitions(sweepcap PRIVATE

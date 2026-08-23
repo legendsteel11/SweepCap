@@ -1,5 +1,6 @@
 #include "app.h"
 
+#include <commctrl.h>
 #include <shellapi.h>
 #include <shlobj.h>
 #include <windowsx.h>
@@ -11,6 +12,7 @@
 
 #include "../res/resource.h"
 #include "app_name.h"
+#include "build_info.h"
 #include "config.h"
 #include "coords.h"
 #include "hook.h"
@@ -235,6 +237,8 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     AppendMenuW(menu.get(), MF_STRING | (settings::RunAtStartup() ? MF_CHECKED : MF_UNCHECKED),
                 IDM_RUN_AT_STARTUP,
                 LoadText(IDS_MENU_STARTUP, L"Run at startup", text, ARRAYSIZE(text)));
+    AppendMenuW(menu.get(), MF_STRING, IDM_ABOUT,
+                LoadText(IDS_MENU_ABOUT, L"About", text, ARRAYSIZE(text)));
 
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_EXIT,
@@ -357,6 +361,39 @@ void ReportDeliveryFailure(WPARAM failures) {
     g_tray.ShowBalloon(
         LoadText(IDS_ERR_CAPTURE_TITLE, L"Capture failed", title, ARRAYSIZE(title)),
         LoadText(id, L"The capture could not be delivered.", text, ARRAYSIZE(text)));
+}
+
+// The About box is a task dialog rather than a DIALOGEX: it follows the
+// system theme, DPI and font on its own, and the content is three fixed lines.
+//
+// The name and version come from the same macros the version resource uses,
+// so the box cannot drift from the binary's metadata.
+void ShowAboutDialog(HWND owner) {
+    wchar_t title[64];
+    wchar_t author[256];
+    wchar_t thirdParty[256];
+
+    TASKDIALOGCONFIG config{};
+    config.cbSize = sizeof(config);
+    config.hwndParent = owner;
+    config.hInstance = GetModuleHandleW(nullptr);
+    config.dwFlags = TDF_ALLOW_DIALOG_CANCELLATION;
+    config.dwCommonButtons = TDCBF_OK_BUTTON;
+    config.pszWindowTitle = LoadText(IDS_MENU_ABOUT, L"About", title, ARRAYSIZE(title));
+    config.pszMainIcon = MAKEINTRESOURCEW(IDI_APPICON);
+    // The version number stays put between releases while builds change
+    // daily, so the commit hash is what actually identifies this binary.
+    config.pszMainInstruction =
+        SWEEPCAP_NAME_W L" " SWEEPCAP_VERSION_W L" (" SWEEPCAP_COMMIT_W L")";
+    config.pszContent = LoadText(IDS_ABOUT_AUTHOR, L"Author: pjh85336@gmail.com", author,
+                                 ARRAYSIZE(author));
+    config.pszFooter =
+        LoadText(IDS_ABOUT_THIRDPARTY, L"This application includes Microsoft WIL (MIT License).",
+                 thirdParty, ARRAYSIZE(thirdParty));
+
+    // The owner window is hidden, so the dialog needs help reaching the front.
+    SetForegroundWindow(owner);
+    TaskDialogIndirect(&config, nullptr, nullptr, nullptr);
 }
 
 void ToggleRunAtStartup(HWND owner) {
@@ -530,6 +567,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
                 case IDM_RUN_AT_STARTUP:
                     ToggleRunAtStartup(hwnd);
                     return 0;
+                case IDM_ABOUT:
+                    ShowAboutDialog(hwnd);
+                    return 0;
                 default:
                     break;
             }
@@ -597,7 +637,7 @@ int Run(HINSTANCE instance) {
     const bool alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
 
     log::Init();
-    SC_LOG(L"%s %s 시작", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W);
+    SC_LOG(L"%s %s (%s) 시작", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W, SWEEPCAP_COMMIT_W);
 
     if (alreadyRunning) {
         SC_LOG(L"이미 실행 중이라 종료한다.");

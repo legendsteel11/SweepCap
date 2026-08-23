@@ -9,6 +9,7 @@
 #define IDM_FOLDER_CHANGE  40004
 #define IDM_FOLDER_DEFAULT 40005
 #define IDM_RUN_AT_STARTUP 40006
+#define IDM_ABOUT          40007
 
 // Command ranges for the radio submenus. The item id carries the index, so
 // handling a click is one subtraction and no lookup table.
@@ -59,6 +60,13 @@
 #define IDS_DIM_STRONG        1029
 #define IDS_MENU_DIM          1036
 #define IDS_MENU_WINDOW_GRID  1037
+
+// About box. The name and version are compile-time macros shared with the
+// version resource, so only the author line and the third-party notice live
+// here.
+#define IDS_MENU_ABOUT        1040
+#define IDS_ABOUT_AUTHOR      1041
+#define IDS_ABOUT_THIRDPARTY  1042
 
 // One label per gesture, in the order the menu lists them.
 #define IDS_GESTURE_CTRL_ALT       1030
