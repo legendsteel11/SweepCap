@@ -157,7 +157,7 @@ bool Overlay::EnsureWindow() {
         // system fills it. Black keeps white from flashing through there.
         wc.hbrBackground = static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
         if (RegisterClassExW(&wc) == 0) {
-            SC_LOG(L"[오버레이] RegisterClassEx 실패 err=%lu", GetLastError());
+            SC_LOG(L"[overlay] RegisterClassEx failed err=%lu", GetLastError());
             return false;
         }
         g_classRegistered = true;
@@ -177,7 +177,7 @@ bool Overlay::EnsureWindow() {
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED, kOverlayClass,
         L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr, GetModuleHandleW(nullptr), this);
     if (!hwnd_) {
-        SC_LOG(L"[오버레이] CreateWindowEx 실패 err=%lu", GetLastError());
+        SC_LOG(L"[overlay] CreateWindowEx failed err=%lu", GetLastError());
         return false;
     }
     return true;

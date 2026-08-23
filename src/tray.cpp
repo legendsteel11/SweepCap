@@ -16,7 +16,7 @@ wil::unique_hicon LoadTrayIcon() {
     const HRESULT hr = LoadIconMetric(GetModuleHandleW(nullptr),
                                       MAKEINTRESOURCEW(IDI_APPICON), LIM_SMALL, &raw);
     if (FAILED(hr)) {
-        SC_LOG(L"LoadIconMetric 실패 hr=0x%08lX", static_cast<unsigned long>(hr));
+        SC_LOG(L"LoadIconMetric failed hr=0x%08lX", static_cast<unsigned long>(hr));
         return {};
     }
     return wil::unique_hicon{raw};
@@ -56,7 +56,7 @@ bool Tray::Register() {
     LoadTip(nid.szTip, ARRAYSIZE(nid.szTip));
 
     if (!Shell_NotifyIconW(NIM_ADD, &nid)) {
-        SC_LOG(L"Shell_NotifyIcon(NIM_ADD) 실패 err=%lu", GetLastError());
+        SC_LOG(L"Shell_NotifyIcon(NIM_ADD) failed err=%lu", GetLastError());
         added_ = false;
         return false;
     }
@@ -65,7 +65,7 @@ bool Tray::Register() {
     // normalises right-click to WM_CONTEXTMENU.
     nid.uVersion = NOTIFYICON_VERSION_4;
     if (!Shell_NotifyIconW(NIM_SETVERSION, &nid)) {
-        SC_LOG(L"Shell_NotifyIcon(NIM_SETVERSION) 실패 err=%lu", GetLastError());
+        SC_LOG(L"Shell_NotifyIcon(NIM_SETVERSION) failed err=%lu", GetLastError());
     }
 
     added_ = true;
@@ -77,7 +77,7 @@ bool Tray::Restore() {
     // add a fresh one instead of trying to delete first.
     added_ = false;
     const bool ok = Register();
-    SC_LOG(L"TaskbarCreated: 트레이 아이콘 재등록 %s", ok ? L"성공" : L"실패");
+    SC_LOG(L"TaskbarCreated: tray icon re-registration %s", ok ? L"succeeded" : L"failed");
     return ok;
 }
 
@@ -99,7 +99,7 @@ bool Tray::ShowBalloon(const wchar_t* title, const wchar_t* text) {
     wcscpy_s(nid.szInfo, ARRAYSIZE(nid.szInfo), text);
 
     if (!Shell_NotifyIconW(NIM_MODIFY, &nid)) {
-        SC_LOG(L"Shell_NotifyIcon(NIF_INFO) 실패 err=%lu", GetLastError());
+        SC_LOG(L"Shell_NotifyIcon(NIF_INFO) failed err=%lu", GetLastError());
         return false;
     }
     return true;

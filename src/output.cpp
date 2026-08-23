@@ -89,7 +89,7 @@ constexpr wchar_t kUnnamedApp[] = L"Screen";
 bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     const std::wstring& root = settings::CaptureRoot();
     if (root.empty()) {
-        SC_LOG(L"[저장] 저장 폴더를 정하지 못했다.");
+        SC_LOG(L"[save] could not determine the save folder.");
         return false;
     }
 
@@ -102,7 +102,7 @@ bool EnsureCaptureFolder(const SYSTEMTIME& now, std::wstring& outFolder) {
     const int created = SHCreateDirectoryExW(nullptr, folder, nullptr);
     if (created != ERROR_SUCCESS && created != ERROR_ALREADY_EXISTS &&
         created != ERROR_FILE_EXISTS) {
-        SC_LOG(L"[저장] 폴더 생성 실패 (%d) %s", created, folder);
+        SC_LOG(L"[save] folder creation failed (%d) %s", created, folder);
         return false;
     }
 
@@ -120,27 +120,27 @@ std::vector<uint8_t> EncodePng(const Bitmap32& bitmap) {
 
     auto factory = wil::CoCreateInstanceNoThrow<IWICImagingFactory>(CLSID_WICImagingFactory);
     if (!factory) {
-        SC_LOG(L"[인코딩] WICImagingFactory 생성 실패");
+        SC_LOG(L"[encode] WICImagingFactory creation failed");
         return out;
     }
 
     wil::com_ptr_nothrow<IStream> stream;
     if (FAILED(CreateStreamOnHGlobal(nullptr, TRUE, &stream))) {
-        SC_LOG(L"[인코딩] CreateStreamOnHGlobal 실패");
+        SC_LOG(L"[encode] CreateStreamOnHGlobal failed");
         return out;
     }
 
     wil::com_ptr_nothrow<IWICBitmapEncoder> encoder;
     if (FAILED(factory->CreateEncoder(GUID_ContainerFormatPng, nullptr, &encoder)) ||
         FAILED(encoder->Initialize(stream.get(), WICBitmapEncoderNoCache))) {
-        SC_LOG(L"[인코딩] PNG 인코더 초기화 실패");
+        SC_LOG(L"[encode] PNG encoder initialization failed");
         return out;
     }
 
     wil::com_ptr_nothrow<IWICBitmapFrameEncode> frame;
     wil::com_ptr_nothrow<IPropertyBag2> props;
     if (FAILED(encoder->CreateNewFrame(&frame, &props)) || FAILED(frame->Initialize(props.get()))) {
-        SC_LOG(L"[인코딩] 프레임 초기화 실패");
+        SC_LOG(L"[encode] frame initialization failed");
         return out;
     }
 
@@ -148,11 +148,11 @@ std::vector<uint8_t> EncodePng(const Bitmap32& bitmap) {
     if (FAILED(frame->SetSize(static_cast<UINT>(bitmap.width),
                               static_cast<UINT>(bitmap.height))) ||
         FAILED(frame->SetPixelFormat(&format))) {
-        SC_LOG(L"[인코딩] 프레임 설정 실패");
+        SC_LOG(L"[encode] frame setup failed");
         return out;
     }
     if (format != GUID_WICPixelFormat32bppBGRA) {
-        SC_LOG(L"[인코딩] 인코더가 32bppBGRA를 받지 않았다");
+        SC_LOG(L"[encode] encoder rejected 32bppBGRA");
         return out;
     }
 
@@ -162,13 +162,13 @@ std::vector<uint8_t> EncodePng(const Bitmap32& bitmap) {
     if (FAILED(frame->WritePixels(static_cast<UINT>(bitmap.height), stride,
                                   static_cast<UINT>(bitmap.ByteSize()), pixels)) ||
         FAILED(frame->Commit()) || FAILED(encoder->Commit())) {
-        SC_LOG(L"[인코딩] PNG 쓰기 실패");
+        SC_LOG(L"[encode] PNG write failed");
         return out;
     }
 
     HGLOBAL global = nullptr;
     if (FAILED(GetHGlobalFromStream(stream.get(), &global)) || global == nullptr) {
-        SC_LOG(L"[인코딩] GetHGlobalFromStream 실패");
+        SC_LOG(L"[encode] GetHGlobalFromStream failed");
         return out;
     }
     const SIZE_T size = GlobalSize(global);
@@ -188,7 +188,7 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
     // Build every block before opening the clipboard, to hold it open briefly.
     wil::unique_hglobal dib = MakeDibV5(bitmap);
     if (!dib) {
-        SC_LOG(L"[클립보드] DIBV5 블록 생성 실패");
+        SC_LOG(L"[clipboard] DIBV5 block creation failed");
         return false;
     }
     wil::unique_hglobal pngBlock;
@@ -198,11 +198,11 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
 
     auto clipboard = wil::open_clipboard(owner);
     if (!clipboard) {
-        SC_LOG(L"[클립보드] OpenClipboard 실패 err=%lu", GetLastError());
+        SC_LOG(L"[clipboard] OpenClipboard failed err=%lu", GetLastError());
         return false;
     }
     if (!EmptyClipboard()) {
-        SC_LOG(L"[클립보드] EmptyClipboard 실패 err=%lu", GetLastError());
+        SC_LOG(L"[clipboard] EmptyClipboard failed err=%lu", GetLastError());
         return false;
     }
 
@@ -212,7 +212,7 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
         dib.release();
         any = true;
     } else {
-        SC_LOG(L"[클립보드] CF_DIBV5 등록 실패 err=%lu", GetLastError());
+        SC_LOG(L"[clipboard] CF_DIBV5 set failed err=%lu", GetLastError());
     }
 
     const UINT pngFormat = PngClipboardFormat();
@@ -220,7 +220,7 @@ bool CopyToClipboard(HWND owner, const Bitmap32& bitmap, const std::vector<uint8
         if (SetClipboardData(pngFormat, pngBlock.get()) != nullptr) {
             pngBlock.release();
         } else {
-            SC_LOG(L"[클립보드] PNG 등록 실패 err=%lu", GetLastError());
+            SC_LOG(L"[clipboard] PNG set failed err=%lu", GetLastError());
         }
     }
     return any;
@@ -278,21 +278,21 @@ bool SavePng(const std::vector<uint8_t>& png, const std::wstring& appName,
             if (error == ERROR_FILE_EXISTS || error == ERROR_ALREADY_EXISTS) {
                 continue;
             }
-            SC_LOG(L"[저장] 파일 생성 실패 err=%lu %s", error, path);
+            SC_LOG(L"[save] file creation failed err=%lu %s", error, path);
             return false;
         }
 
         DWORD wrote = 0;
         if (!WriteFile(file.get(), png.data(), static_cast<DWORD>(png.size()), &wrote, nullptr) ||
             wrote != png.size()) {
-            SC_LOG(L"[저장] 쓰기 실패 err=%lu %s", GetLastError(), path);
+            SC_LOG(L"[save] write failed err=%lu %s", GetLastError(), path);
             return false;
         }
         outPath.assign(path);
         return true;
     }
 
-    SC_LOG(L"[저장] 이름이 계속 겹친다. 포기한다.");
+    SC_LOG(L"[save] names keep colliding; giving up.");
     return false;
 }
 

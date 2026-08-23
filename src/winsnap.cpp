@@ -97,7 +97,7 @@ bool EnsureGhost() {
         // region clips it to a hollow frame, so nothing else is needed.
         wc.hbrBackground = CreateSolidBrush(kGhostColour);
         if (RegisterClassExW(&wc) == 0) {
-            SC_LOG(L"[창스냅] 유령 창 클래스 등록 실패 err=%lu", GetLastError());
+            SC_LOG(L"[winsnap] ghost window class registration failed err=%lu", GetLastError());
             return false;
         }
         registered = true;
@@ -116,7 +116,7 @@ bool EnsureGhost() {
         kGhostClass, L"", WS_POPUP, 0, 0, 0, 0, nullptr, nullptr,
         GetModuleHandleW(nullptr), nullptr);
     if (g_ghost == nullptr) {
-        SC_LOG(L"[창스냅] 유령 창 생성 실패 err=%lu", GetLastError());
+        SC_LOG(L"[winsnap] ghost window creation failed err=%lu", GetLastError());
         return false;
     }
     return true;
@@ -302,8 +302,8 @@ void CALLBACK WinEventProc(HWINEVENTHOOK, DWORD event, HWND hwnd, LONG idObject,
 
     const BOOL ok = SetWindowPos(hwnd, nullptr, left, top, width, height,
                                  SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER);
-    SC_LOG(L"[창스냅] %s (%ld,%ld,%ld,%ld) -> (%ld,%ld,%ld,%ld) 여백 %ld/%ld/%ld/%ld",
-           ok ? L"적용" : L"SetWindowPos 실패", frame.left, frame.top, frame.right,
+    SC_LOG(L"[winsnap] %s (%ld,%ld,%ld,%ld) -> (%ld,%ld,%ld,%ld) margins %ld/%ld/%ld/%ld",
+           ok ? L"applied" : L"SetWindowPos failed", frame.left, frame.top, frame.right,
            frame.bottom, target.left, target.top, target.right, target.bottom, margin.left,
            margin.top, margin.right, margin.bottom);
 }
@@ -324,10 +324,10 @@ bool Install() {
                              WinEventProc, 0, 0,
                              WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
     if (g_hook == nullptr) {
-        SC_LOG(L"[창스냅] SetWinEventHook 실패 err=%lu", GetLastError());
+        SC_LOG(L"[winsnap] SetWinEventHook failed err=%lu", GetLastError());
         return false;
     }
-    SC_LOG(L"[창스냅] 창 이벤트 훅 설치됨");
+    SC_LOG(L"[winsnap] window event hook installed");
     return true;
 }
 

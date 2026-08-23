@@ -14,8 +14,6 @@
 //   2. %LOCALAPPDATA%\SweepCap\sweepcap-debug.log
 //
 // Never call this from a hook callback. File I/O is forbidden there.
-//
-// Message text stays Korean: the log is read by the developer during testing.
 
 namespace sc::log {
 

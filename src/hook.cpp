@@ -144,10 +144,10 @@ bool Install(HWND target) {
     g_target = target;
     g_hook.reset(SetWindowsHookExW(WH_MOUSE_LL, MouseProc, GetModuleHandleW(nullptr), 0));
     if (!g_hook) {
-        SC_LOG(L"[훅] SetWindowsHookEx(WH_MOUSE_LL) 실패 err=%lu", GetLastError());
+        SC_LOG(L"[hook] SetWindowsHookEx(WH_MOUSE_LL) failed err=%lu", GetLastError());
         return false;
     }
-    SC_LOG(L"[훅] 저수준 마우스 훅 설치됨");
+    SC_LOG(L"[hook] low-level mouse hook installed");
     return true;
 }
 
@@ -157,7 +157,7 @@ void Remove() {
     }
     g_hook.reset();
     g_dragging.store(false, std::memory_order_release);
-    SC_LOG(L"[훅] 해제됨");
+    SC_LOG(L"[hook] removed");
 }
 
 bool Installed() { return static_cast<bool>(g_hook); }

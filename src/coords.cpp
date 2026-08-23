@@ -96,8 +96,8 @@ RECT WindowFrameBounds(HWND hwnd, bool* usedDwm) {
 void LogDesktopGeometry(const wchar_t* reason) {
     const DesktopGeometry desktop = QueryDesktop();
 
-    SC_LOG(L"--- 모니터 레이아웃 (%s) ---", reason);
-    SC_LOG(L"가상 데스크탑: origin=(%ld,%ld) size=%ldx%ld  right=%ld bottom=%ld",
+    SC_LOG(L"--- monitor layout (%s) ---", reason);
+    SC_LOG(L"virtual desktop: origin=(%ld,%ld) size=%ldx%ld  right=%ld bottom=%ld",
            desktop.bounds.left, desktop.bounds.top, desktop.Width(), desktop.Height(),
            desktop.bounds.right, desktop.bounds.bottom);
 
@@ -114,9 +114,9 @@ void LogDesktopGeometry(const wchar_t* reason) {
     // Record whether the two conditions the test plan calls for hold on this
     // machine. If neither does, the mixed-DPI and negative-origin paths are
     // never exercised.
-    SC_LOG(L"검증 조건: 혼합 DPI=%s, 음수 원점=%s",
-           desktop.HasMixedDpi() ? L"예" : L"아니오 (미검증 경로)",
-           desktop.HasNegativeOrigin() ? L"예" : L"아니오 (미검증 경로)");
+    SC_LOG(L"test conditions: mixed DPI=%s, negative origin=%s",
+           desktop.HasMixedDpi() ? L"yes" : L"no (path unexercised)",
+           desktop.HasNegativeOrigin() ? L"yes" : L"no (path unexercised)");
 }
 
 }  // namespace sc

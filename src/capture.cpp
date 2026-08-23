@@ -52,13 +52,13 @@ bool FrozenFrame::GrabPixels() {
     const int width = static_cast<int>(bounds.right - bounds.left);
     const int height = static_cast<int>(bounds.bottom - bounds.top);
     if (width <= 0 || height <= 0) {
-        SC_LOG(L"[캡처] 가상 데스크탑 크기가 이상하다: %dx%d", width, height);
+        SC_LOG(L"[capture] virtual desktop size looks wrong: %dx%d", width, height);
         return false;
     }
 
     wil::unique_hdc_window screenDc{wil::window_dc{GetDC(nullptr), nullptr}};
     if (!screenDc) {
-        SC_LOG(L"[캡처] GetDC(nullptr) 실패 err=%lu", GetLastError());
+        SC_LOG(L"[capture] GetDC(nullptr) failed err=%lu", GetLastError());
         return false;
     }
 
@@ -76,7 +76,7 @@ bool FrozenFrame::GrabPixels() {
     wil::unique_hbitmap dib{
         CreateDIBSection(screenDc.get(), &info, DIB_RGB_COLORS, &bits, nullptr, 0)};
     if (!dib || bits == nullptr) {
-        SC_LOG(L"[캡처] CreateDIBSection 실패 err=%lu (%dx%d)", GetLastError(), width, height);
+        SC_LOG(L"[capture] CreateDIBSection failed err=%lu (%dx%d)", GetLastError(), width, height);
         return false;
     }
 
@@ -85,7 +85,7 @@ bool FrozenFrame::GrabPixels() {
     {
         wil::unique_hdc blitDc{CreateCompatibleDC(screenDc.get())};
         if (!blitDc) {
-            SC_LOG(L"[캡처] CreateCompatibleDC 실패 err=%lu", GetLastError());
+            SC_LOG(L"[capture] CreateCompatibleDC failed err=%lu", GetLastError());
             return false;
         }
         auto scope = wil::SelectObject(blitDc.get(), dib.get());
@@ -94,7 +94,7 @@ bool FrozenFrame::GrabPixels() {
         // overlays - appear in the capture. It costs 8-10 ms extra.
         if (!BitBlt(blitDc.get(), 0, 0, width, height, screenDc.get(), bounds.left, bounds.top,
                     SRCCOPY | CAPTUREBLT)) {
-            SC_LOG(L"[캡처] BitBlt 실패 err=%lu", GetLastError());
+            SC_LOG(L"[capture] BitBlt failed err=%lu", GetLastError());
             return false;
         }
         GdiFlush();
@@ -144,7 +144,7 @@ bool FrozenFrame::GrabPixels() {
             }
             dimBitmap_ = std::move(dimDib);
         } else {
-            SC_LOG(L"[캡처] 어둡게 만든 사본 생성 실패 err=%lu", GetLastError());
+            SC_LOG(L"[capture] dimmed copy creation failed err=%lu", GetLastError());
         }
     }
 
@@ -153,7 +153,7 @@ bool FrozenFrame::GrabPixels() {
     bounds_ = bounds;
     grabbedAt_ = GetTickCount64();
 
-    SC_LOG(L"[캡처] 화면 읽기 %dx%d (%.1f MB) %.2f ms (BitBlt %.2f / 어둡게 %.2f)", width,
+    SC_LOG(L"[capture] screen read %dx%d (%.1f MB) %.2f ms (BitBlt %.2f / dim %.2f)", width,
            height, static_cast<double>(width) * height * 4.0 / (1024.0 * 1024.0),
            watch.ElapsedMs(), blitMs, watch.ElapsedMs() - blitMs);
     return true;
@@ -170,7 +170,7 @@ bool FrozenFrame::AttachDc() {
     wil::unique_hdc_window screenDc{wil::window_dc{GetDC(nullptr), nullptr}};
     wil::unique_hdc memDc{CreateCompatibleDC(screenDc.get())};
     if (!memDc) {
-        SC_LOG(L"[캡처] AttachDc: CreateCompatibleDC 실패 err=%lu", GetLastError());
+        SC_LOG(L"[capture] AttachDc: CreateCompatibleDC failed err=%lu", GetLastError());
         return false;
     }
     selection_ = wil::SelectObject(memDc.get(), bitmap_.get());

@@ -126,7 +126,7 @@ void WriteInt(const wchar_t* section, const wchar_t* key, int value) {
         return;
     }
     if (!WritePrivateProfileStringW(section, key, text, g_iniPath.c_str())) {
-        SC_LOG(L"[설정] 저장 실패 %s/%s err=%lu", section, key, GetLastError());
+        SC_LOG(L"[settings] save failed %s/%s err=%lu", section, key, GetLastError());
     }
 }
 
@@ -136,7 +136,7 @@ void WriteText(const wchar_t* section, const wchar_t* key, const wchar_t* value)
     }
     // A null value deletes the key, which is how the default is expressed.
     if (!WritePrivateProfileStringW(section, key, value, g_iniPath.c_str())) {
-        SC_LOG(L"[설정] 저장 실패 %s/%s err=%lu", section, key, GetLastError());
+        SC_LOG(L"[settings] save failed %s/%s err=%lu", section, key, GetLastError());
     }
 }
 
@@ -217,19 +217,19 @@ void Load() {
     // default rather than failing at the end of a capture, when the image
     // would already be lost.
     if (folder[0] != L'\0' && GetFileAttributesW(folder) == INVALID_FILE_ATTRIBUTES) {
-        SC_LOG(L"[설정] 저장 폴더가 없다. 기본값으로 간다. %s", folder);
+        SC_LOG(L"[settings] save folder is gone; falling back to the default. %s", folder);
         folder[0] = L'\0';
     }
     ApplyCaptureRoot(folder);
 
     const GridChoice& grid = kGridChoices[g_gridIndex];
     if (grid.ByDivision()) {
-        SC_LOG(L"[설정] 수식키=%d 격자=%dx%d 분할 폴더=%s%s",
+        SC_LOG(L"[settings] modifiers=%d grid=%dx%d divisions folder=%s%s",
                kGestures[g_gestureIndex].modifiers, grid.cols, grid.rows,
-               g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (기본)" : L"");
+               g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (default)" : L"");
     } else {
-        SC_LOG(L"[설정] 수식키=%d 격자=%dpx 폴더=%s%s", kGestures[g_gestureIndex].modifiers,
-               grid.px, g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (기본)" : L"");
+        SC_LOG(L"[settings] modifiers=%d grid=%dpx folder=%s%s", kGestures[g_gestureIndex].modifiers,
+               grid.px, g_captureRoot.c_str(), CaptureRootIsDefault() ? L" (default)" : L"");
     }
 }
 
@@ -250,7 +250,7 @@ void SetGestureIndex(int index) {
     }
     g_gestureIndex = index;
     WriteInt(L"gesture", L"modifiers", kGestures[index].modifiers);
-    SC_LOG(L"[설정] 수식키 변경 mask=%d snap=%d", kGestures[index].modifiers,
+    SC_LOG(L"[settings] modifiers changed mask=%d snap=%d", kGestures[index].modifiers,
            kGestures[index].snap);
 }
 
@@ -287,9 +287,9 @@ void SetWindowGridIndex(int index) {
     WriteInt(L"window", L"gridcols", choice.cols);
     WriteInt(L"window", L"gridrows", choice.rows);
     if (choice.ByDivision()) {
-        SC_LOG(L"[설정] 창 격자 변경 %d x %d 분할", choice.cols, choice.rows);
+        SC_LOG(L"[settings] window grid changed %d x %d divisions", choice.cols, choice.rows);
     } else {
-        SC_LOG(L"[설정] 창 격자 변경 %dpx", choice.px);
+        SC_LOG(L"[settings] window grid changed %dpx", choice.px);
     }
 }
 
@@ -314,7 +314,7 @@ void SetDimIndex(int index) {
     }
     g_dimIndex.store(index, std::memory_order_relaxed);
     WriteInt(L"capture", L"dim", kDimChoices[index]);
-    SC_LOG(L"[설정] 바깥 밝기 변경 %d/8", kDimChoices[index]);
+    SC_LOG(L"[settings] outside brightness changed %d/8", kDimChoices[index]);
 }
 
 const GridChoice* GridChoices(size_t* count) {
@@ -342,9 +342,9 @@ void SetGridIndex(int index) {
     WriteInt(L"capture", L"gridcols", choice.cols);
     WriteInt(L"capture", L"gridrows", choice.rows);
     if (choice.ByDivision()) {
-        SC_LOG(L"[설정] 격자 변경 %d x %d 분할", choice.cols, choice.rows);
+        SC_LOG(L"[settings] grid changed %d x %d divisions", choice.cols, choice.rows);
     } else {
-        SC_LOG(L"[설정] 격자 변경 %dpx", choice.px);
+        SC_LOG(L"[settings] grid changed %dpx", choice.px);
     }
 }
 
@@ -360,8 +360,8 @@ void SetCaptureRoot(const wchar_t* path) {
     const bool toDefault = (path == nullptr || path[0] == L'\0');
     ApplyCaptureRoot(toDefault ? nullptr : path);
     WriteText(L"save", L"folder", toDefault ? nullptr : path);
-    SC_LOG(L"[설정] 저장 폴더 변경 %s%s", g_captureRoot.c_str(),
-           toDefault ? L" (기본)" : L"");
+    SC_LOG(L"[settings] save folder changed %s%s", g_captureRoot.c_str(),
+           toDefault ? L" (default)" : L"");
 }
 
 bool RunAtStartup() {
@@ -378,7 +378,7 @@ bool SetRunAtStartup(bool on) {
     wil::unique_hkey key;
     if (RegCreateKeyExW(HKEY_CURRENT_USER, kRunKeyPath, 0, nullptr, 0, KEY_SET_VALUE,
                         nullptr, &key, nullptr) != ERROR_SUCCESS) {
-        SC_LOG(L"[설정] Run 키를 열지 못했다 err=%lu", GetLastError());
+        SC_LOG(L"[settings] could not open the Run key err=%lu", GetLastError());
         return false;
     }
 
@@ -402,7 +402,7 @@ bool SetRunAtStartup(bool on) {
     const LSTATUS status = RegSetValueExW(key.get(), SWEEPCAP_NAME_W, 0, REG_SZ,
                                           reinterpret_cast<const BYTE*>(quoted), bytes);
     if (status != ERROR_SUCCESS) {
-        SC_LOG(L"[설정] Run 값을 쓰지 못했다 status=%ld", status);
+        SC_LOG(L"[settings] could not write the Run value status=%ld", status);
         return false;
     }
     return true;

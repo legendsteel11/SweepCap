@@ -72,7 +72,7 @@ void WriteResourceUsage(const wchar_t* tag) {
     // GR_GDIOBJECTS and GR_USEROBJECTS are per-process totals. A capture
     // creates and destroys several of each, so a healthy run returns to the
     // same numbers rather than to zero.
-    Write(L"[자원] %s GDI=%u USER=%u 핸들=%lu 작업세트=%.1f MB", tag,
+    Write(L"[resources] %s GDI=%u USER=%u handles=%lu working set=%.1f MB", tag,
           GetGuiResources(self, GR_GDIOBJECTS), GetGuiResources(self, GR_USEROBJECTS),
           [] {
               DWORD count = 0;

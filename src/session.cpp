@@ -132,7 +132,7 @@ void CaptureSession::Init(HWND host) {
     host_ = host;
     g_prewarmWork = CreateThreadpoolWork(PrewarmWork, nullptr, nullptr);
     if (g_prewarmWork == nullptr) {
-        SC_LOG(L"[세션] CreateThreadpoolWork 실패 err=%lu. 미리 뜨기 없이 간다.",
+        SC_LOG(L"[session] CreateThreadpoolWork failed err=%lu; continuing without prewarm.",
                GetLastError());
     }
 }
@@ -254,7 +254,7 @@ void CaptureSession::Begin(HWND owner) {
     // outliving the drag that is starting.
     EndFlash();
     if (active_) {
-        SC_LOG(L"[세션] 이미 진행 중인데 Begin이 왔다. 앞의 것을 접는다.");
+        SC_LOG(L"[session] Begin while already active; dropping the previous session.");
         Teardown();
     }
 
@@ -265,14 +265,14 @@ void CaptureSession::Begin(HWND owner) {
     ULONGLONG age = 0;
     frame_ = TakeFreshPrewarm(&age);
     if (frame_) {
-        SC_LOG(L"[세션] 시작 anchor=(%ld,%ld) 미리 떠 둔 프레임 사용 (%llu ms 전)", anchor.x,
-               anchor.y, age);
+        SC_LOG(L"[session] start anchor=(%ld,%ld) using prewarmed frame (%llu ms old)",
+               anchor.x, anchor.y, age);
     } else {
-        SC_LOG(L"[세션] 시작 anchor=(%ld,%ld) 미리 떠 둔 것이 없어 지금 뜬다", anchor.x,
+        SC_LOG(L"[session] start anchor=(%ld,%ld) no prewarmed frame; grabbing now", anchor.x,
                anchor.y);
         frame_ = std::make_unique<FrozenFrame>();
         if (!frame_->GrabPixels()) {
-            SC_LOG(L"[세션] 프리즈 프레임 실패. 접는다.");
+            SC_LOG(L"[session] freeze frame failed; aborting.");
             hook::CancelDrag();
             Teardown();
             return;
@@ -297,14 +297,14 @@ void CaptureSession::Begin(HWND owner) {
     pick_ = WindowPick{};
     {
         const Stopwatch pickWatch;
-        const wchar_t* rule = L"커서 아래 창";
+        const wchar_t* rule = L"window under cursor";
         hasPick_ = PickWindowAt(anchor, &pick_);
         if (!hasPick_ && snapEnabled_) {
-            rule = L"시작 칸의 창 모서리";
+            rule = L"corner in start cell";
             hasPick_ = PickWindowByCorner(startCell_, &pick_);
         }
         if (!hasPick_) {
-            rule = L"모니터 전체";
+            rule = L"whole monitor";
             hasPick_ = PickMonitorAt(anchor, &pick_);
         }
         pickRule_ = hasPick_ ? rule : nullptr;
@@ -314,14 +314,14 @@ void CaptureSession::Begin(HWND owner) {
         // the window it started over.
         appName_ = AppNameForWindow(pick_.hwnd);
         if (hasPick_) {
-            SC_LOG(L"[세션] 잡을 대상 (%s, %.2f ms) %ldx%ld 모서리 반지름 %d", rule,
+            SC_LOG(L"[session] pick (%s, %.2f ms) %ldx%ld corner radius %d", rule,
                    pickWatch.ElapsedMs(), pick_.frame.right - pick_.frame.left,
                    pick_.frame.bottom - pick_.frame.top, pick_.cornerRadius);
         }
     }
 
     if (!frame_->AttachDc() || !overlay_.Show(*frame_, anchor)) {
-        SC_LOG(L"[세션] 오버레이 표시 실패. 접는다.");
+        SC_LOG(L"[session] overlay failed to show; aborting.");
         hook::CancelDrag();
         Teardown();
         return;
@@ -332,7 +332,7 @@ void CaptureSession::Begin(HWND owner) {
 
     active_ = true;
     SetTimer(owner_, kEscapeTimerId, kEscapeTimerMs, nullptr);
-    SC_LOG(L"[세션] 오버레이까지 %.2f ms", watch.ElapsedMs());
+    SC_LOG(L"[session] overlay up in %.2f ms", watch.ElapsedMs());
 }
 
 void CaptureSession::Update() {
@@ -379,7 +379,7 @@ void CaptureSession::Finish(HWND owner) {
     // A whole-window pick is deliberate even without any movement, so the
     // accidental-trigger threshold does not apply to it.
     if (!windowPick && distance < config::kMinDragPixels) {
-        SC_LOG(L"[세션] 드래그가 %.0fpx뿐이다 (최소 %d). 취소한다.", distance,
+        SC_LOG(L"[session] drag was only %.0fpx (minimum %d); cancelling.", distance,
                config::kMinDragPixels);
         Teardown();
         return;
@@ -393,7 +393,7 @@ void CaptureSession::Finish(HWND owner) {
         CarveRoundedCorners(shot, pick_.cornerRadius);
     }
     if (!shot.Valid()) {
-        SC_LOG(L"[세션] 잘라내기 실패 rect=(%ld,%ld,%ld,%ld)", selection.left, selection.top,
+        SC_LOG(L"[session] crop failed rect=(%ld,%ld,%ld,%ld)", selection.left, selection.top,
                selection.right, selection.bottom);
         if (host_ != nullptr) {
             PostMessageW(host_, WM_SC_DELIVERY_FAILED, kDeliveryCaptureFailed, 0);
@@ -429,16 +429,16 @@ void CaptureSession::Finish(HWND owner) {
     // that starts at an offset which is not a multiple of the pitch, an origin
     // taken from the virtual desktop instead of the monitor gives the right
     // size and the wrong position.
-    SC_LOG(L"[세션] 완료 %dx%d (%s) rect=(%ld,%ld,%ld,%ld)  잘라내기 %.2f / 인코딩 %.2f / "
-           L"클립보드 %.2f / 저장 %.2f ms",
+    SC_LOG(L"[session] done %dx%d (%s) rect=(%ld,%ld,%ld,%ld)  crop %.2f / encode %.2f / "
+           L"clipboard %.2f / save %.2f ms",
            shot.width, shot.height,
-           windowPick ? pickRule_ : (snapEnabled_ ? L"격자" : L"자유"), selection.left,
+           windowPick ? pickRule_ : (snapEnabled_ ? L"grid" : L"free"), selection.left,
            selection.top, selection.right, selection.bottom, cropMs, encodeMs, clipboardMs,
            saveMs);
-    SC_LOG(L"[세션] PNG %zu bytes, 클립보드=%s, 저장=%s %s", png.size(),
-           clipboardOk ? L"성공" : L"실패", saveOk ? L"성공" : L"실패",
+    SC_LOG(L"[session] PNG %zu bytes, clipboard=%s, save=%s %s", png.size(),
+           clipboardOk ? L"ok" : L"failed", saveOk ? L"ok" : L"failed",
            saveOk ? path.c_str() : L"");
-    SC_LOG_RESOURCES(L"캡처 후");
+    SC_LOG_RESOURCES(L"after capture");
 
     // Say so when a capture did not arrive anywhere. Release builds compile
     // every SC_LOG away, so without this a failed save is indistinguishable
@@ -480,7 +480,7 @@ void CaptureSession::Cancel(const wchar_t* reason) {
     if (!active_) {
         return;
     }
-    SC_LOG(L"[세션] 취소 (%s)", reason);
+    SC_LOG(L"[session] cancelled (%s)", reason);
     Teardown();
 }
 

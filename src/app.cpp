@@ -277,7 +277,7 @@ void OpenCaptureFolder() {
 void ChangeCaptureFolder(HWND owner) {
     auto dialog = wil::CoCreateInstanceNoThrow<IFileOpenDialog>(CLSID_FileOpenDialog);
     if (!dialog) {
-        SC_LOG(L"[설정] 폴더 선택 대화상자를 만들지 못했다.");
+        SC_LOG(L"[settings] could not create the folder picker dialog.");
         return;
     }
 
@@ -337,7 +337,7 @@ WPARAM g_lastFailureKind = 0;
 void ReportDeliveryFailure(WPARAM failures) {
     const ULONGLONG now = GetTickCount64();
     if (failures == g_lastFailureKind && now - g_lastFailureAt < kFailureRepeatMs) {
-        SC_LOG(L"[알림] 같은 실패가 %llu ms 안에 반복됐다. 알림을 생략한다.",
+        SC_LOG(L"[notify] same failure %llu ms after the last; balloon skipped.",
                now - g_lastFailureAt);
         return;
     }
@@ -491,7 +491,7 @@ void ShowAboutDialog(HWND owner) {
 void ToggleRunAtStartup(HWND owner) {
     const bool next = !settings::RunAtStartup();
     if (settings::SetRunAtStartup(next)) {
-        SC_LOG(L"[설정] 부팅 시 시작 %s", next ? L"활성화" : L"비활성화");
+        SC_LOG(L"[settings] run at startup %s", next ? L"enabled" : L"disabled");
         return;
     }
     wchar_t text[256];
@@ -569,7 +569,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             return 0;
 
         case hook::WM_SC_DRAG_CANCEL:
-            g_session.Cancel(L"우클릭");
+            g_session.Cancel(L"right click");
             return 0;
 
         // The mouse moved: keep the modifier-watch timer alive.
@@ -671,7 +671,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
         // Instrumentation: re-dump the coordinates whenever the monitor
         // configuration changes.
         case WM_DISPLAYCHANGE:
-            g_session.Cancel(L"모니터 구성 변경");
+            g_session.Cancel(L"display change");
             LogDesktopGeometry(L"WM_DISPLAYCHANGE");
             return 0;
 
@@ -681,7 +681,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam) {
             return 0;
 
         case WM_DESTROY:
-            g_session.Cancel(L"종료");
+            g_session.Cancel(L"exit");
             hook::Remove();
             winsnap::Remove();
             g_session.Shutdown();
@@ -708,7 +708,7 @@ HWND CreateHostWindow(HINSTANCE instance) {
     wc.hInstance = instance;
     wc.lpszClassName = SWEEPCAP_WNDCLASS_W;
     if (RegisterClassExW(&wc) == 0) {
-        SC_LOG(L"RegisterClassEx 실패 err=%lu", GetLastError());
+        SC_LOG(L"RegisterClassEx failed err=%lu", GetLastError());
         return nullptr;
     }
 
@@ -716,7 +716,7 @@ HWND CreateHostWindow(HINSTANCE instance) {
                                 WS_OVERLAPPED, 0, 0, 0, 0, nullptr, nullptr, instance,
                                 nullptr);
     if (hwnd == nullptr) {
-        SC_LOG(L"CreateWindowEx 실패 err=%lu", GetLastError());
+        SC_LOG(L"CreateWindowEx failed err=%lu", GetLastError());
     }
     return hwnd;
 }
@@ -729,10 +729,10 @@ int Run(HINSTANCE instance) {
     const bool alreadyRunning = (GetLastError() == ERROR_ALREADY_EXISTS);
 
     log::Init();
-    SC_LOG(L"%s %s (%s) 시작", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W, SWEEPCAP_COMMIT_W);
+    SC_LOG(L"%s %s (%s) starting", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W, SWEEPCAP_COMMIT_W);
 
     if (alreadyRunning) {
-        SC_LOG(L"이미 실행 중이라 종료한다.");
+        SC_LOG(L"already running; exiting.");
         return 0;
     }
 
@@ -751,15 +751,15 @@ int Run(HINSTANCE instance) {
         const bool isPerMonitorV2 =
             AreDpiAwarenessContextsEqual(ctx, DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) !=
             FALSE;
-        SC_LOG(L"DPI 인식: awareness=%d, PerMonitorV2=%s", static_cast<int>(awareness),
-               isPerMonitorV2 ? L"예" : L"아니오 (매니페스트 확인 필요)");
+        SC_LOG(L"DPI awareness: awareness=%d, PerMonitorV2=%s", static_cast<int>(awareness),
+               isPerMonitorV2 ? L"yes" : L"no (check the manifest)");
     }
 
-    LogDesktopGeometry(L"시작");
+    LogDesktopGeometry(L"startup");
 
     g_taskbarCreated = RegisterWindowMessageW(L"TaskbarCreated");
     if (g_taskbarCreated == 0) {
-        SC_LOG(L"RegisterWindowMessage(TaskbarCreated) 실패 err=%lu", GetLastError());
+        SC_LOG(L"RegisterWindowMessage(TaskbarCreated) failed err=%lu", GetLastError());
     }
 
     HWND hwnd = CreateHostWindow(instance);
@@ -798,22 +798,22 @@ int Run(HINSTANCE instance) {
     // events, so losing one does not take the other with it.
     winsnap::Install();
 
-    SC_LOG(L"트레이 상주 시작");
+    SC_LOG(L"resident in the tray");
     // Baseline to compare every later reading against.
-    SC_LOG_RESOURCES(L"시작");
+    SC_LOG_RESOURCES(L"startup");
 
     MSG msg{};
     BOOL got = 0;
     while ((got = GetMessageW(&msg, nullptr, 0, 0)) != 0) {
         if (got == -1) {
-            SC_LOG(L"GetMessage 실패 err=%lu", GetLastError());
+            SC_LOG(L"GetMessage failed err=%lu", GetLastError());
             break;
         }
         TranslateMessage(&msg);
         DispatchMessageW(&msg);
     }
 
-    SC_LOG(L"종료 (코드 %d)", static_cast<int>(msg.wParam));
+    SC_LOG(L"exit (code %d)", static_cast<int>(msg.wParam));
     log::Shutdown();
     return static_cast<int>(msg.wParam);
 }
