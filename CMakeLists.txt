@@ -51,6 +51,13 @@ add_executable(sweepcap WIN32
 
 set_target_properties(sweepcap PROPERTIES OUTPUT_NAME "SweepCap")
 
+# The resource script pulls in files the build system cannot see by reading it,
+# so replacing the icon left the old one compiled in and the build reported
+# nothing to do.
+set_source_files_properties(res/sweepcap.rc PROPERTIES
+    OBJECT_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/res/sweepcap.ico;${CMAKE_CURRENT_SOURCE_DIR}/res/sweepcap.manifest;${CMAKE_CURRENT_SOURCE_DIR}/res/resource.h;${CMAKE_CURRENT_SOURCE_DIR}/src/app_name.h")
+
 target_compile_features(sweepcap PRIVATE cxx_std_20)
 
 target_include_directories(sweepcap PRIVATE

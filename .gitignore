@@ -28,3 +28,6 @@ releases/
 # 기타
 *.log
 Thumbs.db
+
+# 아이콘 편집 원본. PNG만 저장소에 두고 PSD는 로컬에 남긴다.
+*.psd

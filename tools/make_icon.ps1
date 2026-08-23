@@ -1,91 +1,41 @@
-# Generates the SweepCap tray icon.
-# Assembles a multi-size .ico directly from 32bpp BGRA data plus AND masks.
+# Builds res/sweepcap.ico from the artwork in assets/.
+#
+# The .ico is assembled by hand from 32bpp BGRA plus an AND mask, rather than
+# through Bitmap.Save, because that writes a single image and Windows then
+# scales one size to all the others. A tray icon is drawn at 16-24 px, where
+# scaling from 256 is exactly where detail turns to mush.
+#
+# The PNG stays the source of truth; this only converts it.
 Add-Type -AssemblyName System.Drawing
 
 $OutPath = $args[0]
+$SrcPath = $args[1]
+if (-not $OutPath) { $OutPath = "res\sweepcap.ico" }
+if (-not $SrcPath) { $SrcPath = "assets\SweepCap-Icon-s2-png-256.png" }
+
+if (-not (Test-Path $SrcPath)) {
+    Write-Error "Source artwork not found: $SrcPath"
+    exit 1
+}
+
 $sizes = 16,20,24,32,40,48,64,128,256
 
-function New-RoundedPath([single]$x, [single]$y, [single]$w, [single]$h, [single]$r) {
-    $p = New-Object System.Drawing.Drawing2D.GraphicsPath
-    $d = $r * 2
-    $p.AddArc($x,           $y,           $d, $d, 180, 90)
-    $p.AddArc($x + $w - $d, $y,           $d, $d, 270, 90)
-    $p.AddArc($x + $w - $d, $y + $h - $d, $d, $d,   0, 90)
-    $p.AddArc($x,           $y + $h - $d, $d, $d,  90, 90)
-    $p.CloseFigure()
-    return $p
-}
+$source = [System.Drawing.Bitmap]::FromFile((Resolve-Path $SrcPath))
 
 function Render([int]$s) {
     $bmp = New-Object System.Drawing.Bitmap($s, $s, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $g = [System.Drawing.Graphics]::FromImage($bmp)
-    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $g.Clear([System.Drawing.Color]::Transparent)
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+    $g.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
 
-    # Plate: a rounded square. A filled plate rather than bare white marks, so
-    # the icon reads on both light and dark taskbars.
-    $inset = [single]($s * 0.045)
-    $side  = [single]($s - 2 * $inset)
-    $radius = [single]($s * 0.235)
-    $path = New-RoundedPath $inset $inset $side $side $radius
-    $brush = New-Object System.Drawing.Drawing2D.LinearGradientBrush(
-        (New-Object System.Drawing.Point(0, 0)),
-        (New-Object System.Drawing.Point(0, $s)),
-        [System.Drawing.Color]::FromArgb(255, 96, 156, 255),
-        [System.Drawing.Color]::FromArgb(255, 33, 92, 214))
-    $g.FillPath($brush, $path)
-    $brush.Dispose()
-    $path.Dispose()
-
-    # Mark: corner brackets standing for a capture region. A diagonal stroke was
-    # tried alongside them and dropped: it merged with the brackets and read as
-    # a resize icon.
-    #
-    # Small sizes snap to the pixel grid. The tray actually uses 16-24px, where
-    # fractional coordinates turn into antialiased mush.
-    $white = [System.Drawing.Color]::FromArgb(255, 255, 255, 255)
-    $swi = [int][Math]::Max(1, [Math]::Round($s * 0.075))
-    $pen = New-Object System.Drawing.Pen($white, [single]$swi)
-    $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Round
-    $pen.EndCap   = [System.Drawing.Drawing2D.LineCap]::Round
-
-    if ($s -le 24) { $mi = [int][Math]::Round($s * 0.20) }
-    else           { $mi = [int][Math]::Round($s * 0.235) }
-
-    # Odd stroke widths land on pixel centres (x.5), even widths on pixel
-    # boundaries; anything else bleeds.
-    $off = 0.0
-    if ($swi % 2 -eq 1) { $off = 0.5 }
-    $lo = [single]($mi + $off)
-    $hi = [single]($s - $mi - $off)
-
-    if ($s -lt 24) {
-        # Brackets fall apart at this size: draw a plain outline with AA off.
-        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::None
-        $pen.StartCap = [System.Drawing.Drawing2D.LineCap]::Flat
-        $pen.EndCap   = [System.Drawing.Drawing2D.LineCap]::Flat
-        $g.DrawRectangle($pen, $lo, $lo, $hi - $lo, $hi - $lo)
-    } else {
-        $arm = [single][Math]::Round(($hi - $lo) * 0.33)
-        $g.DrawLines($pen, [System.Drawing.PointF[]]@(
-            [System.Drawing.PointF]::new($lo + $arm, $lo),
-            [System.Drawing.PointF]::new($lo, $lo),
-            [System.Drawing.PointF]::new($lo, $lo + $arm)))
-        $g.DrawLines($pen, [System.Drawing.PointF[]]@(
-            [System.Drawing.PointF]::new($hi - $arm, $lo),
-            [System.Drawing.PointF]::new($hi, $lo),
-            [System.Drawing.PointF]::new($hi, $lo + $arm)))
-        $g.DrawLines($pen, [System.Drawing.PointF[]]@(
-            [System.Drawing.PointF]::new($lo, $hi - $arm),
-            [System.Drawing.PointF]::new($lo, $hi),
-            [System.Drawing.PointF]::new($lo + $arm, $hi)))
-        $g.DrawLines($pen, [System.Drawing.PointF[]]@(
-            [System.Drawing.PointF]::new($hi, $hi - $arm),
-            [System.Drawing.PointF]::new($hi, $hi),
-            [System.Drawing.PointF]::new($hi - $arm, $hi)))
-    }
-    $pen.Dispose()
+    # Drawn edge to edge. The artwork carries its own padding, so adding more
+    # here would only make it smaller than its neighbours in the tray.
+    $dst = New-Object System.Drawing.Rectangle(0, 0, $s, $s)
+    $g.DrawImage($source, $dst, 0, 0, $source.Width, $source.Height,
+                 [System.Drawing.GraphicsUnit]::Pixel)
     $g.Dispose()
     return $bmp
 }
@@ -142,6 +92,8 @@ foreach ($s in $sizes) {
     $ms.Dispose()
 }
 
+$source.Dispose()
+
 $out = New-Object System.IO.MemoryStream
 $w2 = New-Object System.IO.BinaryWriter($out)
 $w2.Write([uint16]0); $w2.Write([uint16]1); $w2.Write([uint16]$images.Count)
@@ -156,7 +108,7 @@ foreach ($img in $images) {
 }
 foreach ($img in $images) { $w2.Write([byte[]]$img.bytes) }
 $w2.Flush()
-[System.IO.File]::WriteAllBytes($OutPath, $out.ToArray())
+[System.IO.File]::WriteAllBytes((Join-Path (Get-Location) $OutPath), $out.ToArray())
 $out.Dispose()
 
-Write-Output ("wrote {0} ({1} bytes, {2} sizes: {3})" -f $OutPath, (Get-Item $OutPath).Length, $images.Count, ($sizes -join ','))
+Write-Output "Wrote $OutPath from $SrcPath ($($images.Count) sizes)"
