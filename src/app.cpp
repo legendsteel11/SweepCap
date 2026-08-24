@@ -357,8 +357,16 @@ void ShowTrayMenu(HWND hwnd, POINT screenPoint) {
     AppendMenuW(menu.get(), MF_STRING | (settings::RunAtStartup() ? MF_CHECKED : MF_UNCHECKED),
                 IDM_RUN_AT_STARTUP,
                 LoadText(IDS_MENU_STARTUP, L"Run at startup", text, ARRAYSIZE(text)));
-    AppendMenuW(menu.get(), MF_STRING, IDM_ABOUT,
-                LoadText(IDS_MENU_ABOUT, L"About", text, ARRAYSIZE(text)));
+    // Debug builds say so in the menu. The two builds are identical from the
+    // tray, so telling them apart otherwise means reading the process's memory
+    // use, which is where a debug build's ASan shadow memory shows up. The
+    // marker is not a STRINGTABLE entry: it is the same word in every language
+    // and it does not exist in the shipped binary.
+    LoadText(IDS_MENU_ABOUT, L"About", text, ARRAYSIZE(text));
+#if defined(_DEBUG)
+    wcscat_s(text, ARRAYSIZE(text), L" (Debug)");
+#endif
+    AppendMenuW(menu.get(), MF_STRING, IDM_ABOUT, text);
 
     AppendMenuW(menu.get(), MF_SEPARATOR, 0, nullptr);
     AppendMenuW(menu.get(), MF_STRING, IDM_RESTART,
