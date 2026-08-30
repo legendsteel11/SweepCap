@@ -306,10 +306,19 @@ void Overlay::SetSelection(const RECT& selection, bool windowMode, POINT cursor)
     if (EqualRect(&normalized, &selection_) && windowMode == windowMode_) {
         return;
     }
+    // Window mode decides what every pixel outside the selection is painted
+    // from - the original or the darkened copy - so a change of mode repaints
+    // the whole window. Invalidating only the bands around the two selections
+    // leaves the rest of the screen holding the other mode's pixels.
+    const bool modeChanged = windowMode != windowMode_;
     const RECT before = selection_;
     selection_ = normalized;
     windowMode_ = windowMode;
-    InvalidateForSelection(before, selection_);
+    if (modeChanged) {
+        InvalidateRect(hwnd_, nullptr, FALSE);
+    } else {
+        InvalidateForSelection(before, selection_);
+    }
     UpdateWindow(hwnd_);
 }
 
