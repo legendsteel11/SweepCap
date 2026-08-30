@@ -52,6 +52,9 @@ private:
     RECT CurrentSelection() const;  // what the overlay should show
     bool WindowLatched() const;     // what a release would capture
     bool WindowShown() const;       // whether the highlight is due yet
+    bool DragStarted() const;       // past the click/drag threshold
+    bool SelectionDecided() const;  // whether there is anything worth showing
+    void ShowOverlay(const RECT& selection, bool windowMode);
     void UpdatePickRelease();
     void Teardown();
 
@@ -93,6 +96,21 @@ private:
     bool windowShownLast_ = false;
     bool flashing_ = false;
     ULONGLONG dragStartedAt_ = 0;
+
+    // Whether the overlay has been put up during this session.
+    //
+    // Pressing the button says nothing yet: it may become a click on a window
+    // or a dragged rectangle, and the two want opposite things on screen.
+    // Covering the screen at that point means every press produces a visible
+    // change that carries no information, and for a quick click the capture is
+    // over before it meant anything. So nothing is drawn until the selection is
+    // decided - a drag past the threshold, or the highlight falling due - and a
+    // fast click leaves the screen untouched until the after-the-fact border.
+    //
+    // Set once the show has been attempted, successful or not: a failure must
+    // not retry on every mouse move, and cropping reads the frozen frame, so a
+    // capture without an overlay still delivers.
+    bool overlayShown_ = false;
 };
 
 // Posted when a capture could not be delivered. wParam carries the failures as

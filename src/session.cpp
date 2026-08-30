@@ -177,6 +177,29 @@ bool CaptureSession::WindowShown() const {
            GetTickCount64() - dragStartedAt_ >= kWindowHighlightDelayMs;
 }
 
+bool CaptureSession::DragStarted() const {
+    const POINT anchor = hook::Anchor();
+    const POINT current = hook::Current();
+    const double dx = static_cast<double>(current.x - anchor.x);
+    const double dy = static_cast<double>(current.y - anchor.y);
+    return std::sqrt(dx * dx + dy * dy) >= config::kMinDragPixels;
+}
+
+bool CaptureSession::SelectionDecided() const { return DragStarted() || WindowShown(); }
+
+void CaptureSession::ShowOverlay(const RECT& selection, bool windowMode) {
+    if (overlayShown_ || !frame_) {
+        return;
+    }
+    overlayShown_ = true;
+    const Stopwatch watch;
+    if (!overlay_.Show(*frame_, hook::Anchor(), selection, windowMode, hook::Current())) {
+        SC_LOG(L"[session] overlay failed to show; carrying on without it.");
+        return;
+    }
+    SC_LOG(L"[session] overlay up in %.2f ms", watch.ElapsedMs());
+}
+
 void CaptureSession::UpdatePickRelease() {
     if (!hasPick_ || pickReleased_) {
         return;
@@ -235,6 +258,10 @@ void CaptureSession::Tick() {
     }
     snapEnabled_ = held;
     windowShownLast_ = shown;
+    if (!SelectionDecided()) {
+        return;
+    }
+    ShowOverlay(CurrentSelection(), shown);
     overlay_.SetSelection(CurrentSelection(), shown, hook::Current());
 }
 
@@ -320,8 +347,11 @@ void CaptureSession::Begin(HWND owner) {
         }
     }
 
-    if (!frame_->AttachDc() || !overlay_.Show(*frame_, anchor)) {
-        SC_LOG(L"[session] overlay failed to show; aborting.");
+    // The DC is attached now rather than with the overlay: it is cheap, it is
+    // the last thing that can fail, and failing here still leaves the press
+    // recoverable. The overlay itself waits for the selection to be decided.
+    if (!frame_->AttachDc()) {
+        SC_LOG(L"[session] frame DC failed; aborting.");
         hook::CancelDrag();
         Teardown();
         return;
@@ -329,10 +359,11 @@ void CaptureSession::Begin(HWND owner) {
 
     dragStartedAt_ = GetTickCount64();
     windowShownLast_ = false;
+    overlayShown_ = false;
 
     active_ = true;
     SetTimer(owner_, kEscapeTimerId, kEscapeTimerMs, nullptr);
-    SC_LOG(L"[session] overlay up in %.2f ms", watch.ElapsedMs());
+    SC_LOG(L"[session] ready in %.2f ms", watch.ElapsedMs());
 }
 
 void CaptureSession::Update() {
@@ -343,6 +374,10 @@ void CaptureSession::Update() {
     UpdatePickRelease();
     snapEnabled_ = settings::SnapModifierHeld();
     windowShownLast_ = WindowShown();
+    if (!SelectionDecided()) {
+        return;
+    }
+    ShowOverlay(CurrentSelection(), windowShownLast_);
     overlay_.SetSelection(CurrentSelection(), windowShownLast_, hook::Current());
 }
 
@@ -369,6 +404,7 @@ void CaptureSession::Finish(HWND owner) {
     // A drag needs none of this: its rectangle was on screen the whole time.
     const bool flash = windowPick && !WindowShown();
     if (flash) {
+        ShowOverlay(pick_.frame, true);
         overlay_.SetSelection(pick_.frame, true, hook::Current());
     } else {
         // Take the overlay down first. Cropping reads the frozen frame either
@@ -496,6 +532,7 @@ void CaptureSession::Teardown() {
     }
     flashing_ = false;
     overlay_.Hide();
+    overlayShown_ = false;
     frame_.reset();
     hasPick_ = false;
     pickReleased_ = false;

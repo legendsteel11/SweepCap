@@ -185,14 +185,28 @@ bool Overlay::EnsureWindow() {
 
 void Overlay::Prepare() { EnsureWindow(); }
 
-bool Overlay::Show(const FrozenFrame& frame, POINT anchor) {
+// Edges arrive in drag order, which is whichever way the user pulled.
+static RECT Normalized(const RECT& rect) {
+    RECT out = rect;
+    if (out.left > out.right) {
+        std::swap(out.left, out.right);
+    }
+    if (out.top > out.bottom) {
+        std::swap(out.top, out.bottom);
+    }
+    return out;
+}
+
+bool Overlay::Show(const FrozenFrame& frame, POINT anchor, const RECT& selection, bool windowMode,
+                   POINT cursor) {
     if (!EnsureWindow()) {
         return false;
     }
 
     frame_ = &frame;
-    selection_ = RECT{anchor.x, anchor.y, anchor.x, anchor.y};
-    windowMode_ = false;
+    selection_ = Normalized(selection);
+    windowMode_ = windowMode;
+    cursor_ = cursor;
 
     // Build the font for the DPI of the monitor under the cursor. A window
     // spanning monitors of different DPI has no single right answer, so the
@@ -288,13 +302,7 @@ void Overlay::SetSelection(const RECT& selection, bool windowMode, POINT cursor)
     if (!visible_ || !hwnd_) {
         return;
     }
-    RECT normalized = selection;
-    if (normalized.left > normalized.right) {
-        std::swap(normalized.left, normalized.right);
-    }
-    if (normalized.top > normalized.bottom) {
-        std::swap(normalized.top, normalized.bottom);
-    }
+    const RECT normalized = Normalized(selection);
     if (EqualRect(&normalized, &selection_) && windowMode == windowMode_) {
         return;
     }

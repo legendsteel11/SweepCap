@@ -32,7 +32,12 @@ public:
     void Prepare();
 
     // frame must outlive the call to Hide().
-    bool Show(const FrozenFrame& frame, POINT anchor);
+    //
+    // The selection is supplied rather than started empty. The overlay goes up
+    // only once the selection is decided, and an empty one paints the whole
+    // screen as "outside", so starting empty would dim everything for a frame.
+    bool Show(const FrozenFrame& frame, POINT anchor, const RECT& selection, bool windowMode,
+              POINT cursor);
 
     // selection is in virtual desktop coordinates. windowMode tints the border
     // so it is obvious that a whole window is selected rather than a rectangle
