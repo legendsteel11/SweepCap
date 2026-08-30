@@ -321,9 +321,17 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
         return;
     }
 
+    // A whole window is outlined, never dimmed. Its border already says which
+    // window it is, whereas a dragged rectangle has no outline of its own and
+    // needs the contrast. Dimming for a window would also mean an ordinary
+    // click darkens the whole screen and undarkens it a moment later, which
+    // reads as a flash: real clicks run 300 ms to a second, well past the
+    // delay after which the highlight becomes due.
+    //
     // If building the darkened copy failed, fall back to the original. Nothing
     // gets dimmed, but the selection still works.
-    HDC dimSource = frame_->DimDc() != nullptr ? frame_->DimDc() : frame_->Dc();
+    const bool dim = !windowMode_ && frame_->DimDc() != nullptr;
+    HDC dimSource = dim ? frame_->DimDc() : frame_->Dc();
 
     const RECT sel = ToClient(selection_);
     const bool hasSelection = sel.right > sel.left && sel.bottom > sel.top;
@@ -343,7 +351,11 @@ void Overlay::Paint(HDC dc, const RECT& dirty) {
     RECT label{};
     bool hasLabel = false;
     wil::unique_select_object fontScope;
-    if (hasSelection && labelFont_) {
+    // Not in window mode. The readout is there to steer a drag that is still
+    // being adjusted; a window has a size the user cannot change, and by the
+    // time the border is painted after a click the capture is already done. It
+    // would only be a dark box appearing and vanishing too fast to read.
+    if (hasSelection && !windowMode_ && labelFont_) {
         textLength = swprintf_s(text, L"%ld x %ld", sel.right - sel.left, sel.bottom - sel.top);
         if (textLength > 0) {
             fontScope = wil::SelectObject(dc, labelFont_.get());
