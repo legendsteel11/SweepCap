@@ -102,6 +102,50 @@ bool FrozenFrame::GrabPixels() {
 
     const double blitMs = watch.ElapsedMs();
 
+#if defined(_DEBUG)
+    // Instrumentation for frames that come back partly black.
+    //
+    // The same read performed from another process, with and without
+    // CAPTUREBLT, comes back clean, so what is left to establish is when our
+    // own read goes wrong and over what part of the screen. Sampling on a
+    // coarse grid is cheap enough to run on every capture, which means a bad
+    // frame does not have to be noticed and reported to be diagnosed: the log
+    // already says how much of it was black and where.
+    {
+        const auto* px = static_cast<const uint32_t*>(bits);
+        constexpr int kStep = 32;
+        int sampled = 0;
+        int black = 0;
+        RECT box{width, height, -1, -1};
+        for (int y = 0; y < height; y += kStep) {
+            for (int x = 0; x < width; x += kStep) {
+                ++sampled;
+                if ((px[static_cast<size_t>(y) * width + x] & 0x00FFFFFF) != 0) {
+                    continue;
+                }
+                ++black;
+                if (x < box.left) {
+                    box.left = x;
+                }
+                if (y < box.top) {
+                    box.top = y;
+                }
+                if (x > box.right) {
+                    box.right = x;
+                }
+                if (y > box.bottom) {
+                    box.bottom = y;
+                }
+            }
+        }
+        if (black > 0) {
+            SC_LOG(L"[capture] black %d/%d samples (%.1f%%) box=(%ld,%ld,%ld,%ld)", black, sampled,
+                   sampled > 0 ? 100.0 * black / sampled : 0.0, box.left, box.top, box.right,
+                   box.bottom);
+        }
+    }
+#endif
+
     // Build the darkened copy the overlay lays down outside the selection.
     //
     // Brightness is kept in eighths, assembled from halves, quarters and
