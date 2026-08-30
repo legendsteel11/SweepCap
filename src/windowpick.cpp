@@ -87,16 +87,22 @@ int CornerRadiusFor(HWND hwnd, const RECT& frame) {
         return 0;
     }
 
+    // The corner preference attribute is the one thing here that Windows 11
+    // introduced, and it is also the only version-dependent branch left in the
+    // application. A failure means the corners are square and there is nothing
+    // to carve; falling through to the Windows 11 default instead would shave
+    // 8 DIP off all four corners of every window capture.
     int dip = kCornerRadiusDip;
     DWM_WINDOW_CORNER_PREFERENCE preference = DWMWCP_DEFAULT;
-    if (SUCCEEDED(DwmGetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference,
-                                        sizeof(preference)))) {
-        if (preference == DWMWCP_DONOTROUND) {
-            return 0;
-        }
-        if (preference == DWMWCP_ROUNDSMALL) {
-            dip = kCornerRadiusSmallDip;
-        }
+    if (FAILED(DwmGetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, &preference,
+                                     sizeof(preference)))) {
+        return 0;
+    }
+    if (preference == DWMWCP_DONOTROUND) {
+        return 0;
+    }
+    if (preference == DWMWCP_ROUNDSMALL) {
+        dip = kCornerRadiusSmallDip;
     }
 
     UINT dpiX = 96;

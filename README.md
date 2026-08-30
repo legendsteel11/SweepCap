@@ -15,7 +15,7 @@ It is a single file, `SweepCap.exe`.
 - No installation. Put it anywhere and run it; it lives in the tray.
 - No runtime to install.
 - No administrator rights required.
-- Runs on Windows 11 and later.
+- Runs on Windows 10 and later.
 
 ## Usage
 
