@@ -945,6 +945,45 @@ HWND CreateHostWindow(HINSTANCE instance) {
     return hwnd;
 }
 
+// Forces the UI language for this run:
+//
+//     SweepCap.exe --lang=en-US
+//
+// The resource script carries one STRINGTABLE per language and the loader
+// picks by the user's UI language, so the other one is otherwise only visible
+// on a system whose display language is set to it. This makes it checkable
+// without a second machine.
+//
+// Has to run before anything loads a string, and the preference is set for the
+// process and this thread both: the resource loader reads the thread list, and
+// the process list is what any later thread inherits.
+void ApplyLanguageOverride() {
+    const wchar_t* argument = wcsstr(GetCommandLineW(), L"--lang=");
+    if (argument == nullptr) {
+        return;
+    }
+    argument += wcslen(L"--lang=");
+
+    // MUI_LANGUAGE_NAME takes a double null terminated list. The buffer is
+    // zeroed and the copy stops short of its end, so the terminators are there.
+    wchar_t name[LOCALE_NAME_MAX_LENGTH + 2]{};
+    size_t length = 0;
+    while (length < LOCALE_NAME_MAX_LENGTH && argument[length] != L'\0' &&
+           argument[length] != L' ') {
+        name[length] = argument[length];
+        ++length;
+    }
+    if (length == 0) {
+        return;
+    }
+
+    ULONG count = 0;
+    const BOOL processOk = SetProcessPreferredUILanguages(MUI_LANGUAGE_NAME, name, &count);
+    count = 0;
+    const BOOL threadOk = SetThreadPreferredUILanguages(MUI_LANGUAGE_NAME, name, &count);
+    SC_LOG(L"[lang] override %s process=%d thread=%d", name, processOk, threadOk);
+}
+
 }  // namespace
 
 int Run(HINSTANCE instance) {
@@ -954,6 +993,7 @@ int Run(HINSTANCE instance) {
 
     log::Init();
     SC_LOG(L"%s %s (%s) starting", SWEEPCAP_NAME_W, SWEEPCAP_VERSION_W, SWEEPCAP_COMMIT_W);
+    ApplyLanguageOverride();
 
     // A restart takes over from an instance that is still shutting down, so
     // the check is retried for a few seconds instead of giving up on the
