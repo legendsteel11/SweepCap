@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SweepCap — 드래그 즉시 캡처</title>
+<meta name="description" content="단축키를 누른 채 드래그하면 그 자리에서 캡처가 끝나는 Windows 논스톱 캡처 유틸. 무설치 단일 실행 파일." />
+<link rel="icon" type="image/png" href="./icon.png" />
+<link rel="canonical" href="https://sweepcap.vercel.app/" />
+
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="SweepCap" />
+<meta property="og:url" content="https://sweepcap.vercel.app/" />
+<meta property="og:title" content="SweepCap — 드래그 즉시 캡처" />
+<meta property="og:description" content="단축키를 누른 채 드래그하면 그 자리에서 캡처가 끝나는 Windows 논스톱 캡처 유틸. 무설치 단일 실행 파일." />
+<meta property="og:image" content="https://sweepcap.vercel.app/og.png" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:locale" content="ko_KR" />
+<meta name="twitter:card" content="summary_large_image" />
+
+<style>
+:root{
+  --bg-top:#180d3a;
+  --bg-mid:#271158;
+  --bg-bot:#3b1c7e;
+  --card:rgba(255,255,255,.07);
+  --line:rgba(255,255,255,.13);
+  --fg:#efeafb;
+  --fg-dim:#b3a5cf;
+  --accent:#a98bff;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;background:var(--bg-bot)}
+body{
+  background:linear-gradient(180deg,
+    var(--bg-top) 0%, var(--bg-mid) 52%, var(--bg-bot) 100%);
+  min-height:100vh;
+  position:relative;
+  display:flex;
+  flex-direction:column;
+  color:var(--fg);
+  font-family:'Segoe UI','Malgun Gothic',system-ui,-apple-system,sans-serif;
+  font-size:15px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+}
+a{color:inherit}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+
+html[lang="ko"] [data-i="en"],
+html[lang="en"] [data-i="ko"]{display:none}
+
+header{
+  background:#f6f4fb;
+  box-shadow:0 1px 12px rgba(0,0,0,.18);
+  position:sticky;top:0;z-index:10;
+}
+.bar{display:flex;align-items:center;gap:10px;height:56px}
+.bar img{width:22px;height:22px;border-radius:5px}
+.bar b{font-size:15px;font-weight:500;letter-spacing:-.01em;color:#1e1240}
+.bar nav{margin-left:auto;display:flex;align-items:center;gap:18px}
+#lang{
+  border:1px solid rgba(0,0,0,.2);background:transparent;color:#514372;
+  border-radius:6px;padding:4px 10px;font:inherit;font-size:12.5px;cursor:pointer;
+}
+#lang:hover{color:#1e1240;border-color:#1e1240}
+
+/* The hero is the whole page here: there is no section under it, so its
+   bottom padding is what separates it from the footer and matches the top. */
+.hero{
+  display:grid;grid-template-columns:minmax(0,1fr) auto;gap:40px;align-items:center;
+  padding:76px 0 64px;
+}
+.logo{width:60px;height:60px;border-radius:14px;display:block;margin-bottom:20px}
+/* Its own colour, not the one .hero p would otherwise win with. */
+.hero p.kicker{color:#d0c4ec;font-weight:700;font-size:15px;margin-bottom:2px}
+.hero h1{
+  font-size:31px;line-height:1.3;font-weight:700;letter-spacing:-.02em;
+  margin-bottom:16px;
+}
+.hero h1 em{font-style:normal;color:#b79bff}
+.hero p{color:var(--fg-dim);font-size:15px;max-width:34em}
+.cta{display:flex;align-items:center;gap:16px;margin-top:24px;flex-wrap:wrap}
+.btn{
+  display:inline-block;background:#efeafa;color:#6534cf;text-decoration:none;
+  padding:6px 16px;border-radius:4px;font-weight:700;font-size:14.5px;
+}
+.btn:hover{background:#f8f5ff;color:#5327b8}
+.meta{color:var(--fg-dim);font-size:13px}
+/* No width: the screenshot renders at its own pixel size. Scaling a capture of
+   a user interface softens the text, and a replacement of a different size
+   then needs no change here. max-width only takes over once the viewport is
+   narrower than the image. */
+.shot{
+  max-width:100%;height:auto;border-radius:10px;border:1px solid var(--line);display:block;
+  box-shadow:0 18px 50px rgba(0,0,0,.5);
+}
+
+.list{margin-top:26px;display:flex;flex-direction:column;gap:7px}
+.list li{list-style:none;display:flex;gap:9px;align-items:baseline;font-size:14.5px}
+.list li::before{content:'-';flex:none;color:var(--fg-dim)}
+
+.keys{margin-top:24px;padding-top:20px;border-top:1px solid var(--line);
+      display:flex;gap:9px;flex-direction:column;font-size:13.5px;color:var(--fg-dim)}
+/* Direct children only. The language spans nested inside kbd must stay inline,
+   or they become flex containers and text-align stops centring them. */
+/* Wraps at every width, not only under the breakpoint: between the breakpoint
+   and the full layout the left column is narrow enough that a long label and a
+   fixed-width key would push the row past its column. */
+.keys > span{display:flex;gap:12px;align-items:baseline;flex-wrap:wrap}
+kbd{
+  background:var(--card);border:1px solid rgba(255,255,255,.30);
+  padding:2px 9px;font:inherit;font-size:12.5px;color:var(--fg);
+  flex:none;min-width:158px;text-align:center;
+}
+
+/* The icon draws four arrows converging on a point. The glow behind the hero is
+   the same idea in the background, and it costs no image file. */
+body::before{
+  content:'';
+  position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(680px 420px at 50% 6%, rgba(169,139,255,.20), transparent 70%),
+    radial-gradient(900px 600px at 84% 34%, rgba(101,52,207,.24), transparent 72%);
+}
+main,footer{position:relative;z-index:1}
+
+footer{
+  border-top:1px solid var(--line);padding:30px 0 44px;background:rgba(0,0,0,.30);
+  flex:1 0 auto;}
+.foot{display:flex;gap:44px;flex-wrap:wrap}
+.foot h4{font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;
+         color:var(--fg-dim);margin-bottom:9px}
+.foot a{color:var(--fg);text-decoration:none;font-size:13.5px;display:block;line-height:1.9}
+.foot a:hover{color:var(--accent)}
+.copy{margin-top:26px;color:var(--fg-dim);font-size:12.5px}
+
+@media (max-width:860px){
+  .hero{grid-template-columns:1fr;gap:32px;padding:34px 0}
+  .shot{max-width:100%}
+  .bar nav a{display:none}
+  kbd{min-width:0}
+  .keys > span{flex-wrap:wrap;gap:8px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <img src="./icon.png" alt="" />
+    <b>SweepCap</b>
+    <nav>
+      <button id="lang" type="button"></button>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <div class="hero">
+    <div>
+      <img class="logo" src="./icon.png" alt="" />
+      <p class="kicker">
+        <span data-i="ko">Windows 논스톱 캡처 유틸</span>
+        <span data-i="en">Non-stop capture utility for Windows</span>
+      </p>
+      <h1>
+        <span data-i="ko">드래그 즉시 캡처 - <em>스윕캡</em></span>
+        <span data-i="en">Capture the moment you drag - <em>SweepCap</em></span>
+      </h1>
+      <div class="cta">
+        <a class="btn" href="https://github.com/legendsteel11/SweepCap/releases/latest">
+          <span data-i="ko">다운로드</span><span data-i="en">Download</span>
+        </a>
+        <span class="meta">
+          <span data-i="ko">Windows 10 이상, 무설치 단일 실행 파일 (약 640KB)</span>
+          <span data-i="en">Windows 10 or later, single executable, no installer (about 640KB)</span>
+        </span>
+      </div>
+      <ul class="list">
+        <li>
+          <span data-i="ko">드래그 도중 Shift를 누르면 선택 영역에 격자 맞춤 적용</span>
+          <span data-i="en">Shift during a drag aligns the selection to a grid</span>
+        </li>
+        <li>
+          <span data-i="ko">창 크기 조절 중에 단축키를 누르면 창 크기를 격자에 맞춤</span>
+          <span data-i="en">The shortcut while resizing a window aligns its size to a grid</span>
+        </li>
+        <li>
+          <span data-i="ko">원하는 단축키 조합과 격자 크기 선택 가능</span>
+          <span data-i="en">Shortcut combination and grid size are yours to pick</span>
+        </li>
+        <li>
+          <span data-i="ko">캡처는 Pictures\SweepCap 에 날짜별 폴더로 저장</span>
+          <span data-i="en">Captures saved under Pictures\SweepCap in a folder per date</span>
+        </li>
+        <li>
+          <span data-i="ko">트레이 아이콘 더블클릭으로 저장된 폴더 열기</span>
+          <span data-i="en">Double-click the tray icon to open the folder they went to</span>
+        </li>
+        <li>
+          <span data-i="ko">원하는 저장 폴더 지정 가능</span>
+          <span data-i="en">Any folder you like as the save location</span>
+        </li>
+      </ul>
+      <div class="keys">
+        <span>
+          <kbd><span data-i="ko">Ctrl+Win + 드래그</span><span data-i="en">Ctrl+Win + drag</span></kbd>
+          <span data-i="ko">영역 캡처</span><span data-i="en">Capture a region</span>
+        </span>
+        <span>
+          <kbd><span data-i="ko">Ctrl+Win + 클릭</span><span data-i="en">Ctrl+Win + click</span></kbd>
+          <span data-i="ko">창 혹은 전체화면(바탕화면 클릭 시) 캡처</span>
+          <span data-i="en">Capture a window, or the whole screen when the desktop is clicked</span>
+        </span>
+      </div>
+    </div>
+    <img class="shot" id="shot" src="./screenshots/ko.png" alt="SweepCap" />
+  </div>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot">
+      <div>
+        <h4><span data-i="ko">같은 제작자의 다른 도구</span><span data-i="en">Other tools</span></h4>
+        <a href="https://edgetree.vercel.app/">Edgetree</a>
+        <a href="https://tabstick.com">TabStick</a>
+        <a href="https://desk-noise.vercel.app/">DeskNoise</a>
+      </div>
+      <div>
+        <h4>SweepCap</h4>
+        <a href="https://github.com/legendsteel11/SweepCap/releases/latest"><span data-i="ko">다운로드</span><span data-i="en">Download</span></a>
+        <a href="https://github.com/legendsteel11/SweepCap">GitHub</a>
+        <a href="https://github.com/legendsteel11/SweepCap/blob/master/LICENSE.md">MIT License</a>
+      </div>
+      <div>
+        <h4><span data-i="ko">문의</span><span data-i="en">Contact</span></h4>
+        <a href="mailto:pjh85336@gmail.com">pjh85336@gmail.com</a>
+      </div>
+    </div>
+    <p class="copy">© 2026 SweepCap · MIT</p>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var btn = document.getElementById('lang');
+  var shot = document.getElementById('shot');
+
+  function apply(lang) {
+    document.documentElement.lang = lang;
+    btn.textContent = lang === 'ko' ? 'EN' : 'KR';
+    shot.src = './screenshots/' + lang + '.png';
+    try { localStorage.setItem('sweepcap.lang', lang); } catch (e) {}
+  }
+
+  var saved = null;
+  try { saved = localStorage.getItem('sweepcap.lang'); } catch (e) {}
+  var guess = (navigator.language || '').toLowerCase().startsWith('ko') ? 'ko' : 'en';
+  apply(saved || guess);
+
+  btn.addEventListener('click', function () {
+    apply(document.documentElement.lang === 'ko' ? 'en' : 'ko');
+  });
+})();
+</script>
+
+<!-- Vercel Web Analytics. Served by Vercel; inert when the page is opened locally. -->
+<script defer src="/_vercel/insights/script.js"></script>
+
+</body>
+</html>
