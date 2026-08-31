@@ -88,6 +88,21 @@ header{
 }
 .btn:hover{background:#f8f5ff;color:#5327b8}
 .meta{color:var(--fg-dim);font-size:13px}
+
+/* What is new in the current release. The download button goes straight at the
+   file, so nobody passes the release page on the way and this is where a
+   release gets to say what it changed. */
+.whatsnew{
+  margin-top:26px;padding:14px 18px;border:1px solid var(--line);border-radius:8px;
+  background:var(--card);max-width:34em;
+}
+.whatsnew h3{
+  font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
+  color:var(--accent);margin-bottom:8px;
+}
+.whatsnew ul{margin:0;display:flex;flex-direction:column;gap:5px}
+.whatsnew li{list-style:none;display:flex;gap:9px;align-items:baseline;font-size:13.5px}
+.whatsnew li::before{content:'-';flex:none;color:var(--fg-dim)}
 /* No width: the screenshot renders at its own pixel size. Scaling a capture of
    a user interface softens the text, and a replacement of a different size
    then needs no change here. max-width only takes over once the viewport is
@@ -183,6 +198,27 @@ footer{
           <span data-i="en">Windows 10 or later, single executable, no installer (about 640KB)</span>
         </span>
       </div>
+      <div class="whatsnew">
+        <h3><span data-i="ko">v1.1.0 새로운 점</span><span data-i="en">New in v1.1.0</span></h3>
+        <ul>
+          <li>
+            <span data-i="ko">Windows 10 이상에서 동작합니다</span>
+            <span data-i="en">Runs on Windows 10 and later</span>
+          </li>
+          <li>
+            <span data-i="ko">창을 클릭하면 화면을 어둡게 하지 않고 테두리만 표시합니다</span>
+            <span data-i="en">Clicking a window outlines it instead of dimming the rest of the screen</span>
+          </li>
+          <li>
+            <span data-i="ko">선택 영역이 정해진 뒤에 오버레이가 나타납니다</span>
+            <span data-i="en">The overlay appears once there is a selection to show</span>
+          </li>
+          <li>
+            <span data-i="ko">시스템 표시 언어와 무관하게 원하는 인터페이스 언어로 실행할 수 있습니다</span>
+            <span data-i="en">Starts in a chosen interface language, whatever the system display language is</span>
+          </li>
+        </ul>
+      </div>
       <ul class="list">
         <li>
           <span data-i="ko">드래그 도중 Shift를 누르면 선택 영역에 격자 맞춤 적용</span>
@@ -197,16 +233,12 @@ footer{
           <span data-i="en">Shortcut combination and grid size are yours to pick</span>
         </li>
         <li>
-          <span data-i="ko">캡처는 Pictures\SweepCap 에 날짜별 폴더로 저장</span>
-          <span data-i="en">Captures saved under Pictures\SweepCap in a folder per date</span>
+          <span data-i="ko">캡처는 Pictures\SweepCap 에 날짜별 폴더로 저장(변경 가능)</span>
+          <span data-i="en">Captures saved under Pictures\SweepCap in a folder per date (configurable)</span>
         </li>
         <li>
           <span data-i="ko">트레이 아이콘 더블클릭으로 저장된 폴더 열기</span>
           <span data-i="en">Double-click the tray icon to open the folder they went to</span>
-        </li>
-        <li>
-          <span data-i="ko">원하는 저장 폴더 지정 가능</span>
-          <span data-i="en">Any folder you like as the save location</span>
         </li>
       </ul>
       <div class="keys">
