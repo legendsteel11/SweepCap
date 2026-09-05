@@ -298,8 +298,31 @@ footer{
 })();
 </script>
 
-<!-- Vercel Web Analytics. Served by Vercel; inert when the page is opened locally. -->
+<!-- Vercel Web Analytics. Served by Vercel; inert when the page is opened
+     locally. The queue shim lets an event fire before the script has loaded. -->
+<script>
+window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
 <script defer src="/_vercel/insights/script.js"></script>
+
+<script>
+(function () {
+  // A click on the release asset starts a file download and leaves the page
+  // loaded, so a plain handler still has time to send the event.
+  var links = document.querySelectorAll('a[href*="/releases/latest/download/"]');
+  for (var i = 0; i < links.length; i++) {
+    links[i].addEventListener('click', function (e) {
+      window.va('event', {
+        name: 'Download',
+        data: {
+          place: e.currentTarget.className === 'btn' ? 'hero' : 'footer',
+          lang: document.documentElement.lang
+        }
+      });
+    });
+  }
+})();
+</script>
 
 </body>
 </html>
