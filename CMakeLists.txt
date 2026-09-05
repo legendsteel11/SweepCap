@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.25)
-project(SweepCap VERSION 0.1.0 LANGUAGES CXX)
+project(SweepCap VERSION 1.1.0 LANGUAGES CXX)
 
 if(NOT MSVC)
     message(FATAL_ERROR "SweepCap builds with MSVC only.")
