@@ -95,6 +95,8 @@ pjh85336@gmail.com 으로 보내주세요.
 - [TabStick](https://tabstick.com/), 창에 붙는 인덱스 메모.
 - [Edgetree](https://github.com/legendsteel11/Edgetree), 화면 가장자리에 고정되는
   VS Code 탐색기 방식의 파일 탐색 유틸리티.
+- [DeskNoise](https://desk-noise.vercel.app/), 톤과 잡음을 겹쳐 배경 소리를
+  만드는 트레이 상주형 음원 생성기.
 
 ## 라이선스
 

@@ -101,6 +101,8 @@ Send them to pjh85336@gmail.com.
   windows.
 - [Edgetree](https://github.com/legendsteel11/Edgetree), a VS Code
   explorer-style file browser docked to the screen edge.
+- [DeskNoise](https://desk-noise.vercel.app/), a tray sound generator that
+  layers tones and noise into a background sound.
 
 ## License
 
