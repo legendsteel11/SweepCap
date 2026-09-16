@@ -97,6 +97,8 @@ pjh85336@gmail.com 으로 보내주세요.
   VS Code 탐색기 방식의 파일 탐색 유틸리티.
 - [DeskNoise](https://desk-noise.vercel.app/), 톤과 잡음을 겹쳐 배경 소리를
   만드는 트레이 상주형 음원 생성기.
+- [MagicLoupe](https://magicloupe.vercel.app/), 커서를 따라다니며 화면 확대,
+  색상 확인, 간격 측정을 하는 루페 유틸리티.
 
 ## 라이선스
 

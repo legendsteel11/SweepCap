@@ -103,6 +103,8 @@ Send them to pjh85336@gmail.com.
   explorer-style file browser docked to the screen edge.
 - [DeskNoise](https://desk-noise.vercel.app/), a tray sound generator that
   layers tones and noise into a background sound.
+- [MagicLoupe](https://magicloupe.vercel.app/), a loupe that follows the
+  cursor to magnify the screen, pick pixel colors and measure gaps.
 
 ## License
 
